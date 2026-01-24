@@ -1,15 +1,18 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
+import ForceGraph2D from 'react-force-graph-2d';
 import { Article } from '../types';
 
 interface DashboardProps {
   articles: Article[];
+  totalReadTime: number;
   onNavigate: (tab: string) => void;
   onRead: (article: Article) => void;
+  onUpdateArticle: (id: string, updates: Partial<Article>) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) => {
+const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNavigate, onRead, onUpdateArticle }) => {
   // Process data for charts
   const tagCounts: Record<string, number> = {};
   articles.forEach((a: Article) => {
@@ -28,6 +31,34 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
     count: articles.filter((a: Article) => a.rating === i + 1).length
   }));
 
+  // Network Data for Rated Articles only
+  const networkData = useMemo(() => {
+    const ratedArticles = articles.filter(a => a.rating > 0);
+    const nodes = ratedArticles.map(a => ({
+      id: a.id,
+      name: a.title,
+      val: 5 + a.rating,
+      color: a.rating >= 8 ? '#818cf8' : '#6366f1'
+    }));
+    const links: any[] = [];
+    
+    ratedArticles.forEach(a => {
+      if (a.references) {
+        a.references.forEach(refTitle => {
+          const target = ratedArticles.find(other => 
+            other.title.toLowerCase().includes(refTitle.toLowerCase()) || 
+            refTitle.toLowerCase().includes(other.title.toLowerCase())
+          );
+          if (target && target.id !== a.id) {
+            links.push({ source: a.id, target: target.id });
+          }
+        });
+      }
+    });
+
+    return { nodes, links };
+  }, [articles]);
+
   const COLORS = ['#818cf8', '#a78bfa', '#f472b6', '#fb7185', '#fb923c'];
 
   const calculateAverageRating = () => {
@@ -35,6 +66,13 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
     const totalRating = articles.reduce((acc: number, a: Article) => acc + a.rating, 0);
     const average = totalRating / articles.length;
     return average.toFixed(1);
+  };
+
+  const formatReadTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(mins / 60);
+    if (hours > 0) return `${hours}h ${mins % 60}m`;
+    return `${mins}m ${seconds % 60}s`;
   };
 
   return (
@@ -52,32 +90,63 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
         </button>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
           <p className="text-sm font-medium text-slate-500 uppercase">Total Articles</p>
           <p className="text-4xl font-bold text-indigo-400 mt-2">{articles.length}</p>
-          <div className="mt-4 text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full inline-block">
-            +12% from last month
-          </div>
         </div>
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
-          <p className="text-sm font-medium text-slate-500 uppercase">Average Rating</p>
+          <p className="text-sm font-medium text-slate-500 uppercase">Avg. Rating</p>
           <p className="text-4xl font-bold text-purple-400 mt-2">
             {calculateAverageRating()}
           </p>
-          <p className="text-xs text-slate-500 mt-2">Personal content quality score</p>
+        </div>
+        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
+          <p className="text-sm font-medium text-slate-500 uppercase">Read Time</p>
+          <p className="text-3xl font-bold text-emerald-400 mt-2">{formatReadTime(totalReadTime)}</p>
+          <p className="text-[10px] text-slate-500 mt-2 font-black uppercase tracking-widest">Immersion Level: Senior</p>
         </div>
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
           <p className="text-sm font-medium text-slate-500 uppercase">Top Interest</p>
-          <p className="text-4xl font-bold text-pink-400 mt-2">{pieData[0]?.name || 'N/A'}</p>
-          <p className="text-xs text-slate-500 mt-2">Most cited topic in library</p>
+          <p className="text-4xl font-bold text-pink-400 mt-2 truncate">{pieData[0]?.name || 'N/A'}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 min-h-[400px]">
+        {/* Rated Articles Network Plot */}
+        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 h-[400px] flex flex-col relative overflow-hidden">
+          <div className="flex justify-between items-start mb-4">
+             <h3 className="text-lg font-bold text-slate-100">Rated Research Network</h3>
+             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">User Rating > 0</span>
+          </div>
+          <div className="flex-1 bg-slate-950/50 rounded-xl overflow-hidden border border-slate-800/50">
+             {networkData.nodes.length > 0 ? (
+               <ForceGraph2D
+                 graphData={networkData}
+                 nodeLabel="name"
+                 nodeColor={(n: any) => n.color}
+                 nodeVal={(n: any) => n.val}
+                 linkWidth={1}
+                 linkColor={() => 'rgba(129, 140, 248, 0.2)'}
+                 backgroundColor="transparent"
+                 onNodeClick={(node: any) => {
+                   const art = articles.find(a => a.id === node.id);
+                   if (art) onRead(art);
+                 }}
+               />
+             ) : (
+               <div className="h-full flex flex-col items-center justify-center opacity-30">
+                  <span className="text-4xl mb-4">🕸️</span>
+                  <p className="text-xs">Rate articles to see connections</p>
+               </div>
+             )}
+          </div>
+          <p className="mt-4 text-[10px] text-slate-500 italic">Visualizing citation links between your rated library entries.</p>
+        </div>
+
+        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 h-[400px]">
           <h3 className="text-lg font-bold text-slate-100 mb-6">Topic Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie
                 data={pieData}
@@ -101,10 +170,12 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
             </PieChart>
           </ResponsiveContainer>
         </div>
+      </div>
 
-        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 min-h-[400px]">
-          <h3 className="text-lg font-bold text-slate-100 mb-6">Rating Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
+          <h3 className="text-lg font-bold text-slate-100 mb-6">Quality Scores</h3>
+          <ResponsiveContainer width="100%" height={250}>
             <BarChart data={ratingDistribution}>
               <XAxis dataKey="rating" stroke="#94a3b8" />
               <YAxis stroke="#94a3b8" />
@@ -116,31 +187,32 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
             </BarChart>
           </ResponsiveContainer>
         </div>
-      </div>
 
-      {/* Recommended Preview */}
-      <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-2xl p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-indigo-400">🔥 Top Recommendations for You</h3>
-          <button onClick={() => onNavigate('feed')} className="text-xs text-indigo-300 hover:underline">View All New Articles</button>
-        </div>
-        <div className="space-y-3">
-          {articles.filter((a: Article) => a.rating >= 9).slice(0, 2).map((a: Article) => (
-            <div 
-              key={a.id} 
-              onClick={() => onRead(a)}
-              className="bg-slate-900/50 p-3 rounded-xl border border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-800 transition-colors"
-            >
-              <div>
-                <p className="text-sm font-bold text-slate-200">{a.title}</p>
-                <p className="text-xs text-slate-500">{a.authors[0]} • {a.source}</p>
+        {/* Read History Preview */}
+        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 flex flex-col">
+          <h3 className="text-lg font-bold text-slate-100 mb-4">Reading History</h3>
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2">
+            {articles.filter(a => a.userReadTime > 0).sort((a, b) => b.userReadTime - a.userReadTime).slice(0, 5).map(a => (
+              <div key={a.id} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800/50">
+                 <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-200 truncate">{a.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                       <span className="text-[9px] text-slate-500 uppercase">{a.source}</span>
+                       <span className="w-1 h-1 rounded-full bg-slate-700"></span>
+                       <span className="text-[9px] text-indigo-400 font-bold">{Math.round((a.userReadTime / (a.estimatedReadTime || 20) / 60) * 100)}% Consumed</span>
+                    </div>
+                 </div>
+                 <div className="text-right ml-4">
+                    <p className="text-xs font-black text-slate-400">{Math.floor(a.userReadTime / 60)}m</p>
+                 </div>
               </div>
-              <span className="text-xs font-bold text-indigo-400 bg-indigo-400/10 px-2 py-1 rounded">Ranked High</span>
-            </div>
-          ))}
-          {articles.filter((a: Article) => a.rating >= 9).length === 0 && (
-            <p className="text-sm text-slate-500 italic">No high-rated articles found to base recommendations on. Rate more articles in your Library!</p>
-          )}
+            ))}
+            {articles.filter(a => a.userReadTime > 0).length === 0 && (
+              <div className="h-full flex items-center justify-center text-center opacity-30 py-10">
+                 <p className="text-xs">No reading activity recorded yet.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

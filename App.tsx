@@ -3,19 +3,21 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ArticleCard from './components/ArticleCard';
+import BookCard from './components/BookCard';
 import FeedMonitor from './components/FeedMonitor';
-import InterestsManager from './components/InterestsManager';
+import QueueSection from './components/QueueSection';
 import TrendingSection from './components/TrendingSection';
 import NotesSection from './components/NotesSection';
 import SettingsSection from './components/SettingsSection';
 import NetworkGraph from './components/NetworkGraph';
 import Reader from './components/Reader';
 import FeedbackModal from './components/FeedbackModal';
+import InterestsManager from './components/InterestsManager';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
 import { cloudSyncService } from './services/cloudSyncService';
-import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState } from './types';
+import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState, SocialProfiles } from './types';
 
 const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('feed');
@@ -30,6 +32,9 @@ const App: React.FC = () => {
   const [isProcessingBooks, setIsProcessingBooks] = useState(false);
   const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
   const [showImportBooks, setShowImportBooks] = useState(false);
+  
+  // Cross-tab interaction state
+  const [networkFocusId, setNetworkFocusId] = useState<string | null>(null);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +126,15 @@ const App: React.FC = () => {
   const handleUpdateArticle = (id: string, updates: Partial<Article>) => {
     const newData = dbService.updateArticle(id, updates);
     setData({ ...newData });
+    if (activeReadingArticle?.id === id) {
+       setActiveReadingArticle(prev => prev ? { ...prev, ...updates } : null);
+    }
+    if (syncStatus === 'synced') performCloudSync(newData);
+  };
+
+  const handleAddReadTime = (id: string, seconds: number) => {
+    const newData = dbService.addReadTime(id, seconds);
+    setData({ ...newData });
     if (syncStatus === 'synced') performCloudSync(newData);
   };
 
@@ -155,9 +169,20 @@ const App: React.FC = () => {
     if (syncStatus === 'synced') performCloudSync(data);
   };
 
+  const handleUpdateSocialProfiles = (newProfiles: SocialProfiles) => {
+    dbService.saveSocialProfiles(newProfiles);
+    setData({ ...data, socialProfiles: newProfiles });
+    if (syncStatus === 'synced') performCloudSync({ ...data, socialProfiles: newProfiles });
+  };
+
   const handleOpenReader = (article: Article) => {
     setActiveReadingArticle(article);
     setCurrentTab('reader');
+  };
+
+  const handleExploreNetwork = (id: string) => {
+    setNetworkFocusId(id);
+    setCurrentTab('networks');
   };
 
   const handleGoodReadsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,6 +233,13 @@ const App: React.FC = () => {
     });
   }, [data.articles, searchQuery, filterSentiment]);
 
+  const filteredBooks = useMemo(() => {
+    return (data.books || []).filter((book: Book) => {
+      const q = searchQuery.toLowerCase();
+      return book.title.toLowerCase().includes(q) || book.author.toLowerCase().includes(q);
+    });
+  }, [data.books, searchQuery]);
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
       <Sidebar 
@@ -221,13 +253,24 @@ const App: React.FC = () => {
 
       <main className="flex-1 ml-64 p-8">
         <div className="max-w-6xl mx-auto">
-          {currentTab === 'dashboard' && <Dashboard articles={data.articles} onNavigate={setCurrentTab} onRead={handleOpenReader} />}
-          
-          {currentTab === 'interests' && (
-            <InterestsManager 
-              interests={interests} 
-              onUpdateInterests={(ni: string[]) => { setInterests(ni); dbService.saveInterests(ni); }} 
+          {currentTab === 'dashboard' && (
+            <Dashboard 
+              articles={data.articles} 
+              totalReadTime={data.totalReadTime}
+              onNavigate={setCurrentTab} 
+              onRead={handleOpenReader} 
+              onUpdateArticle={handleUpdateArticle}
             />
+          )}
+          
+          {currentTab === 'queue' && (
+             <QueueSection 
+               articles={data.articles}
+               onUpdateArticle={handleUpdateArticle}
+               onRead={handleOpenReader}
+               onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+               allNotes={data.notes}
+             />
           )}
 
           {currentTab === 'trending' && <TrendingSection interests={interests} onAdd={handleAddArticle} onRead={handleOpenReader} />}
@@ -239,14 +282,19 @@ const App: React.FC = () => {
               onNavigateToLibrary={() => setCurrentTab('library')}
               onUpdateNote={handleUpdateNote}
               onCreateNote={handleAddNote}
+              onUpdateArticle={handleUpdateArticle}
+              onAddReadTime={handleAddReadTime}
             />
           )}
 
           {currentTab === 'networks' && (
             <NetworkGraph 
               articles={data.articles} 
-              notes={data.notes} 
+              notes={data.notes}
+              books={data.books}
               onUpdateArticle={handleUpdateArticle}
+              focusNodeId={networkFocusId}
+              onClearFocus={() => setNetworkFocusId(null)}
               onNavigateToArticle={(aid: string) => {
                 const article = data.articles.find((a: Article) => a.id === aid);
                 if (article) handleOpenReader(article);
@@ -271,6 +319,7 @@ const App: React.FC = () => {
                 const article = data.articles.find((a: Article) => a.id === aid);
                 if (article) handleOpenReader(article);
               }}
+              onNavigateToNetwork={handleExploreNetwork}
             />
           )}
 
@@ -344,19 +393,44 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredArticles.map((article: Article) => (
-                  <ArticleCard 
-                    key={article.id} 
-                    article={article} 
-                    allNotes={data.notes}
-                    onUpdate={handleUpdateArticle} 
-                    onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
-                    onRead={() => handleOpenReader(article)}
-                  />
-                ))}
-                {filteredArticles.length === 0 && !showImportBooks && (
-                  <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-3xl border border-dashed border-slate-800">
+              <div className="space-y-12">
+                {/* Articles Section */}
+                {filteredArticles.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <span className="w-8 h-[1px] bg-slate-800"></span> Research Articles
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {filteredArticles.map((article: Article) => (
+                        <ArticleCard 
+                          key={article.id} 
+                          article={article} 
+                          allNotes={data.notes}
+                          onUpdate={handleUpdateArticle} 
+                          onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+                          onRead={() => handleOpenReader(article)}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Books Section */}
+                {filteredBooks.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-black text-amber-500/50 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <span className="w-8 h-[1px] bg-amber-500/20"></span> Scientific Books
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredBooks.map((book: Book) => (
+                        <BookCard key={book.id} book={book} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {filteredArticles.length === 0 && filteredBooks.length === 0 && !showImportBooks && (
+                  <div className="py-20 text-center bg-slate-900/20 rounded-3xl border border-dashed border-slate-800">
                     <p className="text-slate-500 italic">Your library is empty or no matches found. Start by ingesting articles from "AI Recommends" or "Trending".</p>
                   </div>
                 )}
@@ -366,7 +440,37 @@ const App: React.FC = () => {
 
           {currentTab === 'feed' && <FeedMonitor ratedArticles={data.articles} books={data.books} onAdd={handleAddArticle} onRead={handleOpenReader} activeFeeds={feeds.filter(f => f.active)} aiConfig={aiConfig} />}
           
-          {currentTab === 'settings' && <SettingsSection feeds={feeds} onUpdateFeeds={handleUpdateFeeds} aiConfig={aiConfig} onUpdateAIConfig={handleUpdateAIConfig} />}
+          {currentTab === 'topics' && (
+            <div className="space-y-6">
+              <header>
+                <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
+                  <span>🎯</span> Research Topics
+                </h2>
+                <p className="text-slate-400 mt-1">Configure your interests manually or discover them via AI from your social profiles.</p>
+              </header>
+              <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl mt-8">
+                <InterestsManager 
+                  interests={interests} 
+                  onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }}
+                  socialProfiles={data.socialProfiles}
+                  onUpdateSocialProfiles={handleUpdateSocialProfiles}
+                />
+              </div>
+            </div>
+          )}
+
+          {currentTab === 'settings' && (
+            <SettingsSection 
+              feeds={feeds} 
+              onUpdateFeeds={handleUpdateFeeds} 
+              aiConfig={aiConfig} 
+              onUpdateAIConfig={handleUpdateAIConfig} 
+              interests={interests}
+              onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }}
+              socialProfiles={data.socialProfiles}
+              onUpdateSocialProfiles={handleUpdateSocialProfiles}
+            />
+          )}
 
           {currentTab === 'portability' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

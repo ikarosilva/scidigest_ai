@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Article, Note } from '../types';
 
 interface ReaderProps {
@@ -8,17 +8,47 @@ interface ReaderProps {
   onNavigateToLibrary: () => void;
   onUpdateNote: (id: string, updates: Partial<Note>) => void;
   onCreateNote: (note: Note) => void;
+  onUpdateArticle: (id: string, updates: Partial<Article>) => void;
+  onAddReadTime: (id: string, seconds: number) => void;
 }
 
-const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, onUpdateNote, onCreateNote }) => {
+const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, onUpdateNote, onCreateNote, onUpdateArticle, onAddReadTime }) => {
   const [markdown, setMarkdown] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [isMaximized, setIsMaximized] = useState(false);
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  
+  const timerRef = useRef<number | null>(null);
+
+  // Read Time Tracker
+  useEffect(() => {
+    if (article) {
+      setSessionSeconds(0);
+      timerRef.current = window.setInterval(() => {
+        setSessionSeconds(prev => prev + 1);
+      }, 1000);
+    }
+    
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+      }
+    };
+  }, [article?.id]);
+
+  // Sync session time to DB on unmount or article change
+  useEffect(() => {
+    return () => {
+      if (article && sessionSeconds > 0) {
+        onAddReadTime(article.id, sessionSeconds);
+      }
+    };
+  }, [article?.id, sessionSeconds, onAddReadTime]);
 
   // Load existing note or clear
   useEffect(() => {
     if (article) {
       // Find a note specifically linked to this article
-      // We look for a note where this article is the primary or only linked article
       const existingNote = notes.find(n => n.articleIds.includes(article.id));
       if (existingNote) {
         setMarkdown(existingNote.content);
@@ -65,6 +95,16 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
+  const toggleMaximize = () => {
+    setIsMaximized(!isMaximized);
+  };
+
+  const formatTime = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!article) {
     return (
       <div className="h-[calc(100vh-120px)] flex flex-col items-center justify-center text-center p-10 bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl animate-in fade-in duration-500">
@@ -85,29 +125,66 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     );
   }
 
+  const containerClasses = isMaximized 
+    ? "fixed inset-0 z-[100] bg-slate-950 p-4 flex flex-col gap-4 animate-in zoom-in duration-300" 
+    : "h-[calc(100vh-120px)] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500";
+
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className={containerClasses}>
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 font-black uppercase tracking-widest px-2 py-0.5 rounded">PDF Mode</span>
-            <h2 className="text-lg font-bold text-slate-100 truncate max-w-xl">{article.title}</h2>
+            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 font-black uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0">Research Reader</span>
+            <div className="flex items-center gap-3 ml-2 border-l border-slate-700 pl-3">
+               <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Est. Read</span>
+                  <span className="text-xs font-bold text-indigo-400">{article.estimatedReadTime || 20}m</span>
+               </div>
+               <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Session</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">{formatTime(sessionSeconds)}</span>
+               </div>
+            </div>
+            <h2 className="text-lg font-bold text-slate-100 truncate ml-auto">{article.title}</h2>
           </div>
-          <p className="text-xs text-slate-500">{article.authors.join(', ')} • {article.year}</p>
+          <div className="flex items-center gap-4">
+             <p className="text-xs text-slate-500 truncate">{article.authors.join(', ')} • {article.year}</p>
+             <div className="flex items-center gap-1.5 ml-auto md:ml-0 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
+                <span className="text-[9px] font-black uppercase text-slate-500 tracking-tighter">My Rating</span>
+                <div className="flex items-center gap-1">
+                   {[...Array(10)].map((_, i) => (
+                      <button 
+                        key={i}
+                        onClick={() => onUpdateArticle(article.id, { rating: i + 1 })}
+                        className={`w-2.5 h-2.5 rounded-full transition-all ${i < article.rating ? 'bg-indigo-400' : 'bg-slate-700 hover:bg-slate-600'}`}
+                        title={`Rate ${i + 1}/10`}
+                      />
+                   ))}
+                   <span className="text-xs font-bold text-indigo-300 ml-1">{article.rating}</span>
+                </div>
+             </div>
+          </div>
         </div>
         
         <div className="flex items-center gap-3">
           <button 
+            onClick={toggleMaximize}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold p-2.5 rounded-xl transition-all border border-slate-700 flex items-center gap-2 group"
+            title={isMaximized ? "Exit Maximize" : "Maximize Screen"}
+          >
+            {isMaximized ? "縮" : "全"}
+          </button>
+          <button 
             onClick={handleOpenExternal}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-slate-700 flex items-center gap-2 group"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl transition-all border border-slate-700 flex items-center gap-2 group"
           >
             <span className="group-hover:rotate-12 transition-transform">🚀</span> Open in Host App
           </button>
           <button 
-            onClick={onNavigateToLibrary}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
+            onClick={isMaximized ? toggleMaximize : onNavigateToLibrary}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
           >
-             Close Reader
+             {isMaximized ? 'Exit Maximize' : 'Close Reader'}
           </button>
         </div>
       </header>

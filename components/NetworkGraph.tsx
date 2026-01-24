@@ -1,12 +1,15 @@
 
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Article, Note, NetworkViewMode } from '../types';
+import { Article, Note, Book, NetworkViewMode } from '../types';
 import { geminiService } from '../services/geminiService';
 
 interface NetworkGraphProps {
   articles: Article[];
   notes: Note[];
+  books?: Book[];
+  focusNodeId?: string | null;
+  onClearFocus?: () => void;
   onUpdateArticle: (id: string, updates: Partial<Article>) => void;
   onNavigateToArticle: (id: string) => void;
   onNavigateToNote: (id: string) => void;
@@ -15,6 +18,9 @@ interface NetworkGraphProps {
 const NetworkGraph: React.FC<NetworkGraphProps> = ({ 
   articles, 
   notes, 
+  books = [],
+  focusNodeId,
+  onClearFocus,
   onUpdateArticle,
   onNavigateToArticle,
   onNavigateToNote
@@ -24,13 +30,42 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   const [miningProgress, setMiningProgress] = useState(0);
   const fgRef = useRef<any>(null);
 
+  // Set initial zoom and focus if provided
+  useEffect(() => {
+    if (focusNodeId && fgRef.current) {
+      const node = graphData.nodes.find((n: any) => n.id === focusNodeId);
+      if (node) {
+        fgRef.current.centerAt(node.x, node.y, 1000);
+        fgRef.current.zoom(2.5, 1000);
+      }
+    }
+  }, [focusNodeId, fgRef.current]);
+
   // Process data into Graph format (Nodes & Links)
   const graphData = useMemo(() => {
     const nodes: any[] = [];
     const links: any[] = [];
+    
+    // Heuristic to extract "Datasets" from articles
+    const uniqueDatasets = new Set<string>();
+    articles.forEach(a => {
+      if (a.dataLocation) uniqueDatasets.add(a.dataLocation);
+      // Also treat specific tags as datasets if they are frequently used
+      a.tags.forEach(t => {
+        if (t.toLowerCase().includes('data') || t.toLowerCase().includes('set')) {
+          uniqueDatasets.add(t);
+        }
+      });
+    });
 
-    if (viewMode === 'articles' || viewMode === 'unified') {
+    const isFilterActive = !!focusNodeId;
+    const activeNote = isFilterActive ? notes.find(n => n.id === focusNodeId) : null;
+    const allowedArticleIds = activeNote ? new Set(activeNote.articleIds) : null;
+
+    if (viewMode === 'articles' || viewMode === 'unified' || viewMode === 'datasets') {
       articles.forEach((article: Article) => {
+        if (allowedArticleIds && !allowedArticleIds.has(article.id)) return;
+
         nodes.push({
           id: article.id,
           name: article.title,
@@ -43,7 +78,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         if (article.references) {
           article.references.forEach((refTitle: string) => {
             const target = articles.find((a: Article) => a.title.toLowerCase().includes(refTitle.toLowerCase()) || refTitle.toLowerCase().includes(a.title.toLowerCase()));
-            if (target) {
+            if (target && (!allowedArticleIds || allowedArticleIds.has(target.id))) {
               links.push({
                 source: article.id,
                 target: target.id,
@@ -54,10 +89,44 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
             }
           });
         }
+
+        // Add Dataset mapping links
+        if (viewMode === 'datasets') {
+           if (article.dataLocation) {
+             links.push({
+               source: article.id,
+               target: `dataset-${article.dataLocation}`,
+               type: 'usage',
+               color: 'rgba(16, 185, 129, 0.3)'
+             });
+           }
+           article.tags.forEach(t => {
+             if (uniqueDatasets.has(t)) {
+                links.push({
+                  source: article.id,
+                  target: `dataset-${t}`,
+                  type: 'usage',
+                  color: 'rgba(16, 185, 129, 0.3)'
+                });
+             }
+           });
+        }
       });
     }
 
-    if (viewMode === 'notes' || viewMode === 'unified') {
+    if (viewMode === 'datasets') {
+      uniqueDatasets.forEach(ds => {
+        nodes.push({
+          id: `dataset-${ds}`,
+          name: ds,
+          type: 'dataset',
+          val: 20,
+          color: '#10b981'
+        });
+      });
+    }
+
+    if ((viewMode === 'unified' || viewMode === 'notes') && (!allowedArticleIds)) {
       notes.forEach((note: Note) => {
         nodes.push({
           id: note.id,
@@ -67,7 +136,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           color: '#fbbf24'
         });
 
-        // Add links to articles (Note -> Article)
         if (viewMode === 'unified') {
           note.articleIds.forEach((articleId: string) => {
             if (articles.find((a: Article) => a.id === articleId)) {
@@ -80,27 +148,36 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
             }
           });
         }
+      });
+    }
 
-        // Add links between notes (Note -> Note) based on shared articles
-        notes.forEach((otherNote: Note) => {
-          if (note.id !== otherNote.id) {
-            const shared = note.articleIds.filter((id: string) => otherNote.articleIds.includes(id));
-            if (shared.length > 0) {
+    if (viewMode === 'unified' && !allowedArticleIds) {
+      books.forEach((book: Book) => {
+        nodes.push({
+          id: book.id,
+          name: book.title,
+          type: 'book',
+          val: 12,
+          color: '#f59e0b'
+        });
+        
+        // Find links from articles to books via topics (heuristic)
+        articles.forEach(art => {
+           const sharedTag = art.tags.find(t => book.title.toLowerCase().includes(t.toLowerCase()));
+           if (sharedTag) {
               links.push({
-                source: note.id,
-                target: otherNote.id,
-                type: 'shared',
-                color: 'rgba(251, 191, 36, 0.1)',
-                dash: [2, 2]
+                source: art.id,
+                target: book.id,
+                type: 'thematic',
+                color: 'rgba(245, 158, 11, 0.1)'
               });
-            }
-          }
+           }
         });
       });
     }
 
     return { nodes, links };
-  }, [articles, notes, viewMode]);
+  }, [articles, notes, books, viewMode, focusNodeId]);
 
   const handleMineCitations = async () => {
     if (isMining) return;
@@ -130,14 +207,22 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
-            <span>🕸️</span> Research Networks
+            <span>🕸️</span> Networks
           </h2>
-          <p className="text-slate-400 mt-1">Visualize citations, conceptual links, and research clusters.</p>
+          <p className="text-slate-400 mt-1">Visualize citations, conceptual links, and dataset clusters.</p>
         </div>
         
         <div className="flex items-center gap-3">
+           {focusNodeId && (
+              <button 
+                onClick={onClearFocus}
+                className="bg-red-500/10 text-red-400 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-red-500/20 hover:bg-red-500/20 transition-all"
+              >
+                Clear Dataset Filter ✕
+              </button>
+           )}
            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex">
-             {(['notes', 'articles', 'unified'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
+             {(['notes', 'articles', 'unified', 'datasets'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
                <button
                  key={mode}
                  onClick={() => setViewMode(mode)}
@@ -192,7 +277,8 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
             backgroundColor="transparent"
             onNodeClick={(node: any) => {
               if (node.type === 'article') onNavigateToArticle(node.id);
-              else onNavigateToNote(node.id);
+              else if (node.type === 'note') onNavigateToNote(node.id);
+              else if (node.type === 'dataset') console.log('Focus on dataset', node.name);
             }}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const label = node.name;
@@ -223,25 +309,20 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
            <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Graph Legend</h4>
            <div className="flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-indigo-400"></span>
-              <span className="text-xs text-slate-300 font-medium">Article Node</span>
+              <span className="text-xs text-slate-300 font-medium">Research Paper</span>
            </div>
            <div className="flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-amber-400"></span>
-              <span className="text-xs text-slate-300 font-medium">Research Note Node</span>
+              <span className="text-xs text-slate-300 font-medium">Note / Annotation</span>
+           </div>
+           <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-[#10b981]"></span>
+              <span className="text-xs text-slate-300 font-medium">Dataset / Method Hub</span>
            </div>
            <div className="flex items-center gap-3 mt-1 border-t border-slate-800 pt-3">
               <div className="w-6 h-0.5 bg-indigo-500/40"></div>
               <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Citation Link</span>
            </div>
-           <div className="flex items-center gap-3">
-              <div className="w-6 h-0.5 border-t border-dashed border-amber-500/30"></div>
-              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Shared Context Link</span>
-           </div>
-        </div>
-        
-        {/* Interaction hint */}
-        <div className="absolute top-6 right-6 bg-slate-900/40 text-[9px] text-slate-500 uppercase font-black tracking-widest px-3 py-1 rounded-full border border-slate-800 pointer-events-none">
-           Drag to Pan • Scroll to Zoom • Click to Open
         </div>
       </div>
     </div>

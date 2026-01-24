@@ -10,17 +10,38 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, syncStatus }) => {
-  const tabs = [
-    { id: 'feed', label: 'AI Recommends', icon: '✨' },
-    { id: 'trending', label: 'Trending', icon: '🔥' },
-    { id: 'networks', label: 'Research Networks', icon: '🕸️' },
-    { id: 'reader', label: 'Reader', icon: '📖' },
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'notes', label: 'Research Notes', icon: '✍️' },
-    { id: 'interests', label: 'Topics of Interest', icon: '🎯' },
-    { id: 'library', label: 'Article Library', icon: '📚' },
-    { id: 'portability', label: 'Data & Privacy', icon: '💾' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  const groups = [
+    {
+      label: 'Discovery',
+      items: [
+        { id: 'feed', label: 'AI Recommends', icon: '✨' },
+        { id: 'trending', label: 'Trending', icon: '🔥' },
+      ]
+    },
+    {
+      label: 'Workspace',
+      items: [
+        { id: 'queue', label: 'Queue', icon: '⏳' },
+        { id: 'reader', label: 'Reader', icon: '📖' },
+        { id: 'library', label: 'Library', icon: '📚' },
+        { id: 'notes', label: 'Notes', icon: '✍️' },
+      ]
+    },
+    {
+      label: 'Insights',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'networks', label: 'Networks', icon: '🕸️' },
+      ]
+    },
+    {
+      label: 'Configuration',
+      items: [
+        { id: 'topics', label: 'Topics', icon: '🎯' },
+        { id: 'portability', label: 'Data & Privacy', icon: '💾' },
+        { id: 'settings', label: 'Settings', icon: '⚙️' },
+      ]
+    }
   ];
 
   const statusColors: Record<SyncStatus, string> = {
@@ -40,52 +61,63 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
   };
 
   return (
-    <div className="w-64 h-screen bg-slate-900 border-r border-slate-800 flex flex-col fixed left-0 top-0 overflow-y-auto z-50">
-      <div className="p-6">
-        <h1 className="text-2xl font-bold text-indigo-400 flex items-center gap-2">
-          <span>🔬</span> SciDigest AI
+    <div className="w-64 h-screen bg-slate-900 border-r border-slate-800 flex flex-col fixed left-0 top-0 overflow-y-auto z-50 shadow-2xl">
+      <div className="p-6 pb-2">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+          <span className="relative inline-block">
+            <span className="text-orange-400">🕯️</span>
+            <span className="absolute -inset-1 bg-orange-500/20 blur-md rounded-full animate-pulse"></span>
+          </span>
+          SciDigest
         </h1>
-        <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">Research Assistant</p>
+        <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-[0.2em] font-black italic">Scholar's Focus</p>
       </div>
       
-      <nav className="flex-1 px-4 space-y-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setTab(tab.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-              currentTab === tab.id
-                ? 'bg-indigo-500/10 text-indigo-400 font-medium'
-                : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-            }`}
-          >
-            <span className="text-xl">{tab.icon}</span>
-            {tab.label}
-          </button>
+      <nav className="flex-1 px-4 py-4 space-y-6">
+        {groups.map((group) => (
+          <div key={group.label} className="space-y-1">
+            <h3 className="px-4 text-[9px] font-black uppercase tracking-[0.2em] text-slate-600 mb-2">
+              {group.label}
+            </h3>
+            {group.items.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+                  currentTab === tab.id
+                    ? 'bg-indigo-500/10 text-indigo-400 font-medium'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                <span className="text-lg">{tab.icon}</span>
+                <span className="text-sm font-semibold">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
 
-      <div className="px-4 mb-4">
+      <div className="px-4 mb-2">
         <button 
           onClick={onOpenFeedback}
-          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-slate-400 hover:bg-slate-800 hover:text-orange-400 border border-transparent hover:border-orange-500/20"
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all text-slate-500 hover:bg-slate-800 hover:text-orange-400 border border-transparent hover:border-orange-500/10"
         >
-          <span className="text-xl">🐞</span>
-          Submit Issues
+          <span className="text-lg">🐞</span>
+          <span className="text-xs font-semibold">Submit Issues</span>
         </button>
       </div>
 
       <div className="p-4 border-t border-slate-800">
-        <div className="bg-slate-950 rounded-2xl p-4 space-y-3">
+        <div className="bg-slate-950 rounded-2xl p-3 space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Storage Status</span>
-            <div className={`w-2 h-2 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'sync-orbit' : ''}`}></div>
+            <span className="text-[9px] text-slate-600 uppercase font-black tracking-widest">Storage Status</span>
+            <div className={`w-1.5 h-1.5 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'sync-orbit' : ''}`}></div>
           </div>
           <div className="flex items-center gap-2">
-             <span className="text-xl">☁️</span>
+             <span className="text-lg">☁️</span>
              <div>
-               <p className="text-xs font-bold text-slate-200">{statusText[syncStatus]}</p>
-               <p className="text-[10px] text-slate-500">Local-First Encryption</p>
+               <p className="text-[11px] font-bold text-slate-300">{statusText[syncStatus]}</p>
+               <p className="text-[9px] text-slate-600">Encrypted Sync</p>
              </div>
           </div>
         </div>

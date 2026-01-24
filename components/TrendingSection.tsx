@@ -33,6 +33,30 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
     );
   };
 
+  const createPaperObject = (paper: any, inQueue = false): Article => ({
+    id: Math.random().toString(36).substr(2, 9),
+    title: paper.title,
+    authors: paper.authors,
+    abstract: paper.snippet,
+    date: `${paper.year}-01-01`,
+    year: paper.year,
+    source: (paper.source as any) || FeedSourceType.MANUAL,
+    rating: 5,
+    tags: ['Trending', ...selectedTopics.slice(0, 2)],
+    isBookmarked: false,
+    notes: `Added from trending research (Heat: ${paper.heatScore}%)`,
+    userReadTime: 0,
+    isInQueue: inQueue,
+    queueDate: inQueue ? new Date().toISOString() : undefined,
+    userReviews: {
+      sentiment: 'Unknown',
+      summary: 'Highly trending topic in community.',
+      citationCount: paper.citationCount,
+      citedByUrl: paper.scholarUrl
+    },
+    noteIds: [] as string[]
+  });
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -109,21 +133,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
               </div>
 
               <h3 
-                onClick={() => onRead({
-                  id: Math.random().toString(),
-                  title: paper.title,
-                  authors: paper.authors,
-                  abstract: paper.snippet,
-                  date: `${paper.year}-01-01`,
-                  year: paper.year,
-                  source: (paper.source as any) || FeedSourceType.MANUAL,
-                  rating: 5,
-                  tags: ['Trending'],
-                  isBookmarked: false,
-                  notes: '',
-                  noteIds: [],
-                  userReviews: { sentiment: 'Unknown', summary: '' }
-                })}
+                onClick={() => onRead(createPaperObject(paper))}
                 className="text-xl font-bold text-slate-100 mb-2 leading-snug group-hover:text-indigo-400 transition-colors cursor-pointer"
               >
                 {paper.title}
@@ -146,31 +156,21 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
                     </a>
                   )}
                 </div>
-                <button 
-                  onClick={() => onAdd({
-                    id: Math.random().toString(36).substr(2, 9),
-                    title: paper.title,
-                    authors: paper.authors,
-                    abstract: paper.snippet,
-                    date: `${paper.year}-01-01`,
-                    year: paper.year,
-                    source: (paper.source as any) || FeedSourceType.MANUAL,
-                    rating: 5,
-                    tags: ['Trending', ...selectedTopics.slice(0, 2)],
-                    isBookmarked: false,
-                    notes: `Added from trending research (Heat: ${paper.heatScore}%)`,
-                    userReviews: {
-                      sentiment: 'Unknown',
-                      summary: 'Highly trending topic in community.',
-                      citationCount: paper.citationCount,
-                      citedByUrl: paper.scholarUrl
-                    },
-                    noteIds: []
-                  })}
-                  className="bg-slate-800 hover:bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
-                >
-                  📥 Ingest
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => onAdd(createPaperObject(paper, true))}
+                    className="bg-slate-800 hover:bg-amber-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
+                    title="Add to Reading Queue"
+                  >
+                    ⏳ Queue
+                  </button>
+                  <button 
+                    onClick={() => onAdd(createPaperObject(paper))}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
+                  >
+                    📥 Ingest
+                  </button>
+                </div>
               </div>
             </div>
           ))}

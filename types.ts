@@ -43,6 +43,12 @@ export interface Feed {
   active: boolean;
 }
 
+export interface SocialProfiles {
+  medium?: string;
+  linkedin?: string;
+  googleScholar?: string;
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -60,7 +66,11 @@ export interface Article {
   isBookmarked: boolean;
   notes: string;
   noteIds: string[];
-  references?: string[]; // IDs or Titles of papers this paper cites
+  references?: string[]; 
+  userReadTime: number; // In seconds
+  estimatedReadTime?: number; // In minutes
+  isInQueue?: boolean;
+  queueDate?: string;
 }
 
 export interface Book {
@@ -76,9 +86,11 @@ export interface AppState {
   books: Book[];
   notes: Note[];
   feedbackSubmissions: string[];
-  lastModified: string; // ISO Timestamp for sync
+  lastModified: string; 
   version: string;
   aiConfig: AIConfig;
+  totalReadTime: number; // Total seconds spent in reader across all articles
+  socialProfiles: SocialProfiles;
 }
 
-export type NetworkViewMode = 'notes' | 'articles' | 'unified';
+export type NetworkViewMode = 'notes' | 'articles' | 'unified' | 'datasets';

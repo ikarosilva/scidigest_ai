@@ -1,15 +1,29 @@
 
 import React, { useState } from 'react';
-import { Feed, AIConfig, RecommendationBias } from '../types';
+import { Feed, AIConfig, RecommendationBias, SocialProfiles } from '../types';
+import InterestsManager from './InterestsManager';
 
 interface SettingsSectionProps {
   feeds: Feed[];
   onUpdateFeeds: (feeds: Feed[]) => void;
   aiConfig: AIConfig;
   onUpdateAIConfig: (config: AIConfig) => void;
+  interests: string[];
+  onUpdateInterests: (ni: string[]) => void;
+  socialProfiles: SocialProfiles;
+  onUpdateSocialProfiles: (profiles: SocialProfiles) => void;
 }
 
-const SettingsSection: React.FC<SettingsSectionProps> = ({ feeds, onUpdateFeeds, aiConfig, onUpdateAIConfig }) => {
+const SettingsSection: React.FC<SettingsSectionProps> = ({ 
+  feeds, 
+  onUpdateFeeds, 
+  aiConfig, 
+  onUpdateAIConfig, 
+  interests, 
+  onUpdateInterests,
+  socialProfiles,
+  onUpdateSocialProfiles
+}) => {
   const [newFeedName, setNewFeedName] = useState('');
   const [newFeedUrl, setNewFeedUrl] = useState('');
 
@@ -41,23 +55,39 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({ feeds, onUpdateFeeds,
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+    <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
         <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
-          <span>⚙️</span> Application Settings
+          <span>⚙️</span> Settings
         </h2>
-        <p className="text-slate-400 mt-2">
-          Configure your research environment and feed sources.
+        <p className="text-slate-400 mt-1">
+          Configure your research workflow, topics, and automated feeds.
         </p>
       </header>
 
+      {/* Topics / Interests Integrated into Settings */}
+      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+        <div className="mb-6">
+          <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <span>🎯</span> Research Topics
+          </h3>
+          <p className="text-sm text-slate-500 mt-1">These topics drive feed prioritization and book filtering.</p>
+        </div>
+        <InterestsManager 
+          interests={interests} 
+          onUpdateInterests={onUpdateInterests} 
+          socialProfiles={socialProfiles}
+          onUpdateSocialProfiles={onUpdateSocialProfiles}
+        />
+      </section>
+
       {/* AI Recommendation Engine Config */}
-      <section className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
-        <h3 className="text-lg font-bold text-slate-200 mb-6 flex items-center gap-2">
+      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+        <h3 className="text-xl font-bold text-slate-200 mb-6 flex items-center gap-2">
           <span>🪄</span> AI Recommendation Engine
         </h3>
         <p className="text-sm text-slate-400 mb-8">
-          Adjust how Gemini prioritizes your daily research.
+          Adjust the "Discovery Bias" of the Gemini-powered recommendation system.
         </p>
 
         <div className="space-y-6">
@@ -101,8 +131,8 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({ feeds, onUpdateFeeds,
         </div>
       </section>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-xl">
-        <h3 className="text-lg font-bold text-slate-200 mb-6 flex items-center gap-2">
+      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+        <h3 className="text-xl font-bold text-slate-200 mb-6 flex items-center gap-2">
           <span>📡</span> Feed Sources
         </h3>
         <p className="text-sm text-slate-400 mb-8">
@@ -177,14 +207,6 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({ feeds, onUpdateFeeds,
             </button>
           </form>
         </div>
-      </section>
-
-      <section className="bg-slate-900/50 border border-slate-800 rounded-3xl p-8">
-        <h3 className="text-lg font-bold text-slate-300 mb-4">Gemini API Config</h3>
-        <p className="text-sm text-slate-500 leading-relaxed">
-          The application uses your browser's environment keys for Gemini 3 and 2.5 series models.
-          Ranking accuracy improves as you rate more articles in your library (Human-in-the-Loop RL).
-        </p>
       </section>
     </div>
   );

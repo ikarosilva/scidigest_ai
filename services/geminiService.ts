@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig } from "../types";
+import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles } from "../types";
 
 // Always initialize GoogleGenAI with a named parameter using process.env.API_KEY directly
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -60,6 +60,37 @@ export const geminiService = {
     } catch (error) {
       console.error("Gemini Recommendation Error:", error);
       return candidates.map((_, i) => i);
+    }
+  },
+
+  async discoverInterestsFromProfiles(profiles: SocialProfiles): Promise<string[]> {
+    const ai = getAI();
+    const prompt = `Analyze the following public researcher profiles to identify their primary research interests, technical expertise, and academic focus areas.
+    Profiles provided:
+    ${profiles.medium ? `- Medium: ${profiles.medium}` : ''}
+    ${profiles.linkedin ? `- LinkedIn: ${profiles.linkedin}` : ''}
+    ${profiles.googleScholar ? `- Google Scholar: ${profiles.googleScholar}` : ''}
+    
+    Research these URLs using Google Search to find recent publications, articles, and professional descriptions.
+    Return a JSON array of strings, where each string is a specific research topic (e.g., "Reinforcement Learning", "Biosignal Processing"). Limit to the top 10 most relevant topics.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (error) {
+      console.error("Discover Interests Error:", error);
+      return [];
     }
   },
 

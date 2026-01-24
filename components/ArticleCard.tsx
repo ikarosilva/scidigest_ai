@@ -30,6 +30,13 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     setResearching(false);
   };
 
+  const toggleQueue = () => {
+    onUpdate(article.id, { 
+      isInQueue: !article.isInQueue,
+      queueDate: !article.isInQueue ? new Date().toISOString() : undefined 
+    });
+  };
+
   const sentimentColors: Record<Sentiment, string> = {
     Positive: 'bg-green-500/20 text-green-400 border-green-500/30',
     Neutral: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -40,7 +47,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const linkedNotes = allNotes.filter((n: Note) => article.noteIds.includes(n.id));
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card relative">
       <div className="flex justify-between items-start mb-3">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -146,17 +153,27 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
 
       <div className="flex gap-2">
         <button 
+          onClick={toggleQueue}
+          className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all border ${
+            article.isInQueue 
+            ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20' 
+            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-indigo-400 hover:border-indigo-500/30'
+          }`}
+        >
+          {article.isInQueue ? '⏳ In Queue' : '➕ Queue'}
+        </button>
+        <button 
           onClick={handleSummarize}
           disabled={loading}
-          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-50 shadow-lg shadow-indigo-600/10"
+          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition-colors disabled:opacity-50 shadow-lg shadow-indigo-600/10"
         >
-          {loading ? 'Thinking...' : '⚡ Summarize'}
+          {loading ? 'Thinking...' : '⚡ AI Summary'}
         </button>
         <button 
           onClick={onRead}
           className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2"
         >
-          <span className="text-xs">📖</span> Read
+          <span className="text-xs">📖</span>
         </button>
       </div>
     </div>

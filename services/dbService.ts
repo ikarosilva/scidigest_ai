@@ -1,5 +1,5 @@
 
-import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState } from '../types';
+import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
 const INTERESTS_KEY = 'scidigest_interests_v1';
@@ -51,7 +51,9 @@ const INITIAL_ARTICLES: Article[] = [
     tags: ['Wearables', 'Deep Learning'],
     isBookmarked: false,
     notes: 'Welcome to your library.',
-    noteIds: []
+    noteIds: [],
+    userReadTime: 0,
+    estimatedReadTime: 25
   }
 ];
 
@@ -84,16 +86,31 @@ export const dbService = {
       feedbackSubmissions: [],
       lastModified: new Date().toISOString(),
       version: APP_VERSION,
-      aiConfig: DEFAULT_AI_CONFIG
+      aiConfig: DEFAULT_AI_CONFIG,
+      totalReadTime: 0,
+      socialProfiles: {}
     };
     const parsed = JSON.parse(data) as AppState;
     parsed.lastModified = parsed.lastModified || new Date().toISOString();
     parsed.aiConfig = parsed.aiConfig || DEFAULT_AI_CONFIG;
+    parsed.totalReadTime = parsed.totalReadTime || 0;
+    parsed.socialProfiles = parsed.socialProfiles || {};
+    // Migration for articles
+    parsed.articles = parsed.articles.map(a => ({
+      ...a,
+      userReadTime: a.userReadTime || 0,
+      estimatedReadTime: a.estimatedReadTime || 20
+    }));
     return parsed;
   },
   saveData: (data: AppState) => {
     data.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  },
+  saveSocialProfiles: (profiles: SocialProfiles) => {
+    const data = dbService.getData();
+    data.socialProfiles = profiles;
+    dbService.saveData(data);
   },
   getFeeds: (): Feed[] => {
     const stored = localStorage.getItem(FEEDS_KEY);
@@ -129,6 +146,15 @@ export const dbService = {
   updateArticle: (id: string, updates: Partial<Article>): AppState => {
     const data = dbService.getData();
     data.articles = data.articles.map((a: Article) => a.id === id ? { ...a, ...updates } : a);
+    dbService.saveData(data);
+    return data;
+  },
+  addReadTime: (articleId: string, seconds: number): AppState => {
+    const data = dbService.getData();
+    data.totalReadTime += seconds;
+    data.articles = data.articles.map((a: Article) => 
+      a.id === articleId ? { ...a, userReadTime: (a.userReadTime || 0) + seconds } : a
+    );
     dbService.saveData(data);
     return data;
   },
