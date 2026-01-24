@@ -42,7 +42,7 @@ const QueueSection: React.FC<QueueSectionProps> = ({ articles, onUpdateArticle, 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-            <span>⏳</span> Reading Queue
+            <span>⏳</span> Queue
           </h2>
           <p className="text-slate-400 mt-1">Your prioritized papers awaiting deep analysis.</p>
         </div>
