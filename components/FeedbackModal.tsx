@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { dbService } from '../services/dbService';
+import { dbService, APP_VERSION } from '../services/dbService';
 
 interface FeedbackModalProps {
   onClose: () => void;
@@ -18,17 +18,24 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ onClose }) => {
     e.preventDefault();
     if (isLimitReached) return;
 
-    const repoUrl = "https://github.com/user/scidigest-ai/issues/new"; // Update with actual repo
+    // Use a placeholder URL or the user's specific repo if known
+    const repoUrl = "https://github.com/user/scidigest-ai/issues/new"; 
     const label = type === 'bug' ? 'bug' : 'enhancement';
+    
+    // Prefix the version to the title for easy triage
+    const prefixedTitle = `[v${APP_VERSION}] ${title}`;
+    
     const body = encodeURIComponent(`
 ### ${type === 'bug' ? 'Bug Description' : 'Feature Request'}
 ${description}
 
 ---
+**Application Version**: ${APP_VERSION}
+**Platform**: Browser (Web)
 *Submitted via SciDigest AI Feedback Tool*
     `);
     
-    const finalUrl = `${repoUrl}?title=${encodeURIComponent(title)}&labels=${label}&body=${body}`;
+    const finalUrl = `${repoUrl}?title=${encodeURIComponent(prefixedTitle)}&labels=${label}&body=${body}`;
     
     // Track locally
     dbService.trackFeedbackSubmission();
@@ -42,7 +49,10 @@ ${description}
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
       <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-200">
         <div className="p-6 border-b border-slate-800 flex justify-between items-center">
-          <h3 className="text-xl font-bold text-white">Submit Issues</h3>
+          <div>
+            <h3 className="text-xl font-bold text-white">Submit Issues</h3>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">SciDigest AI v{APP_VERSION}</p>
+          </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>
         </div>
         
@@ -111,7 +121,7 @@ ${description}
           </button>
           
           <p className="text-[10px] text-center text-slate-500">
-            You will be redirected to GitHub. A valid GitHub account is required to post the issue.
+            Submitting for <strong>v{APP_VERSION}</strong>. You will be redirected to GitHub to finalize the post.
           </p>
         </form>
       </div>
