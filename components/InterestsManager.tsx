@@ -33,13 +33,15 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
   };
 
   const handleDiscoverInterests = async () => {
-    if (!socialProfiles.medium && !socialProfiles.linkedin && !socialProfiles.googleScholar && !socialProfiles.usePublicWebSearch) {
-      alert("Please provide at least one profile URL or enable 'User Public Web Search' to discover interests.");
+    const hasAnyInput = socialProfiles.name || socialProfiles.medium || socialProfiles.linkedin || socialProfiles.googleScholar;
+    
+    if (!hasAnyInput && !socialProfiles.usePublicWebSearch) {
+      alert("Please provide a Name, at least one profile URL, or enable 'User Public Web Search' to discover interests.");
       return;
     }
 
     if (socialProfiles.usePublicWebSearch && !socialProfiles.name) {
-      alert("Please provide your full name for the Public Web Search.");
+      alert("Please provide your full name to use Public Web Search discovery.");
       return;
     }
 
@@ -47,22 +49,21 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
     try {
       const suggestedInterests = await geminiService.discoverInterestsFromProfiles(socialProfiles);
       
-      // Filter out interests already in the list and limit to top 10 new ones
-      const existingInterestsLower = interests.map(i => i.toLowerCase());
-      const newTopics = suggestedInterests
-        .filter(t => !existingInterestsLower.includes(t.toLowerCase()))
-        .slice(0, 10);
+      // EXCLUSION LOGIC: Filter out topics already in the list
+      const existingLower = interests.map(i => i.toLowerCase());
+      const filteredNew = suggestedInterests
+        .filter(t => !existingLower.includes(t.toLowerCase()))
+        .slice(0, 10); // LIMIT LOGIC: Capped at 10 top topics
 
-      if (newTopics.length > 0) {
-        const merged = [...interests, ...newTopics];
-        onUpdateInterests(merged);
-        alert(`Discovered ${newTopics.length} new topics! (Capped at top 10 unique results)`);
+      if (filteredNew.length > 0) {
+        onUpdateInterests([...interests, ...filteredNew]);
+        alert(`Discovered ${filteredNew.length} new research trajectories!`);
       } else {
-        alert("Gemini couldn't find any NEW specific research topics. It might be finding topics you already have listed.");
+        alert("Gemini couldn't find any NEW research topics not already in your list.");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to analyze profiles. Check your internet connection or try again later.");
+      alert("Failed to analyze academic presence. Ensure your URLs are public or try again.");
     }
     setIsDiscovering(false);
   };
@@ -118,14 +119,14 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
             </button>
           </form>
           <p className="text-[11px] text-slate-500 leading-relaxed italic">
-            Adding topics manually gives the most direct control over your feed discovery.
+            Directly specifying fields ensures the AI recommendation engine has a clear anchor.
           </p>
         </div>
 
         {/* Social Profile Discovery */}
         <div className="space-y-4 bg-slate-950/50 p-6 rounded-[2rem] border border-slate-800">
-          <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Social Presence Analysis</h4>
-          <p className="text-[11px] text-slate-500 mb-4">SciDigest can crawl your public profiles to find recurring research themes.</p>
+          <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2">Social & Academic Discovery</h4>
+          <p className="text-[11px] text-slate-500 mb-4">SciDigest can analyze your online presence to map your focus areas.</p>
           
           <div className="space-y-3">
             <div className="relative">
@@ -142,7 +143,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">✍️</span>
               <input 
                 type="url" 
-                placeholder="Medium URL"
+                placeholder="Medium Profile URL"
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                 value={socialProfiles.medium || ''}
                 onChange={(e) => updateProfileField('medium', e.target.value)}
@@ -152,7 +153,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">💼</span>
               <input 
                 type="url" 
-                placeholder="LinkedIn URL"
+                placeholder="LinkedIn Profile URL"
                 className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
                 value={socialProfiles.linkedin || ''}
                 onChange={(e) => updateProfileField('linkedin', e.target.value)}
@@ -178,7 +179,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
               />
               <div className="flex flex-col">
                 <span className="text-xs font-bold text-slate-200">User Public Web Search</span>
-                <span className="text-[10px] text-slate-500">Enable broad web discovery (Scholar, ResearchGate)</span>
+                <span className="text-[10px] text-slate-500">Search broad web (Scholar, ResearchGate) by name</span>
               </div>
             </label>
           </div>
@@ -195,7 +196,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
             {isDiscovering ? (
               <>
                 <span className="w-4 h-4 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
-                Analyzing Profiles...
+                Discovering trajectories...
               </>
             ) : (
               <>🔎 Discover My Interests</>

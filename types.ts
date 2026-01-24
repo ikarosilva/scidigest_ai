@@ -7,7 +7,8 @@ export enum FeedSourceType {
   GOODREADS = 'GoodReads',
   MANUAL = 'Manual',
   GOOGLE_SCHOLAR = 'Google Scholar',
-  ARXIV = 'arXiv'
+  ARXIV = 'arXiv',
+  AMAZON = 'Amazon'
 }
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
@@ -79,8 +80,13 @@ export interface Book {
   id: string;
   title: string;
   author: string;
-  rating: number;
+  rating: number; // 1-5 or 1-10
   dateAdded: string;
+  price?: string;
+  amazonUrl?: string;
+  isInQueue?: boolean;
+  description?: string;
+  tags?: string[];
 }
 
 export interface AppState {
@@ -95,4 +101,4 @@ export interface AppState {
   socialProfiles: SocialProfiles;
 }
 
-export type NetworkViewMode = 'notes' | 'articles' | 'unified' | 'datasets';
+export type NetworkViewMode = 'notes' | 'articles' | 'unified' | 'datasets' | 'author';

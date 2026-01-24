@@ -143,6 +143,12 @@ export const dbService = {
     dbService.saveData(data);
     return data;
   },
+  addArticles: (articles: Article[]): AppState => {
+    const data = dbService.getData();
+    data.articles = [...articles, ...data.articles];
+    dbService.saveData(data);
+    return data;
+  },
   updateArticle: (id: string, updates: Partial<Article>): AppState => {
     const data = dbService.getData();
     data.articles = data.articles.map((a: Article) => a.id === id ? { ...a, ...updates } : a);

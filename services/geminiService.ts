@@ -70,19 +70,19 @@ export const geminiService = {
       profiles.medium ? `- Medium: ${profiles.medium}` : '',
       profiles.linkedin ? `- LinkedIn: ${profiles.linkedin}` : '',
       profiles.googleScholar ? `- Google Scholar: ${profiles.googleScholar}` : '',
-      profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Search the broad web for academic work by this name)' : ''
+      profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Broadly search the web for this name)' : ''
     ].filter(Boolean).join('\n');
 
-    const prompt = `You are a researcher's assistant. Discover primary research interests, academic focus, and technical expertise based on provided context.
+    const prompt = `You are a researcher's assistant. Discover primary research interests and academic focus based on the provided context.
     
     User context:
     ${profileContext}
     
     INSTRUCTIONS:
-    1. If "User Public Web Search" is enabled and a name is provided, perform a broad search for "${profiles.name} publications", "${profiles.name} research", and search Google Scholar / ResearchGate.
-    2. Analyze provided URLs for academic or technical themes. If a URL is restricted, extract the likely person from the path and search for their work.
-    3. Return a JSON array of specific research topics (e.g. "Biosignal Processing", "Bayesian Inference").
-    4. Focus on discovering NEW topics. Limit results to top 15 most relevant strings.`;
+    1. If a Full Name is provided and "Public Web Search" is enabled, perform a search for that individual's publications and topics.
+    2. If a URL (like LinkedIn or Medium) is restricted or difficult to parse directly, extract the likely person from the URL and search for their work on Scholar or ResearchGate.
+    3. Return a JSON array of technical research topics.
+    4. Provide at most 15 specific, high-quality strings. Exclude generic terms like 'Research' or 'Science'.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -101,6 +101,173 @@ export const geminiService = {
     } catch (error) {
       console.error("Discover Interests Error:", error);
       return [];
+    }
+  },
+
+  async searchAmazonBooks(topics: string[]): Promise<Partial<Book>[]> {
+    const ai = getAI();
+    const prompt = `Find the 10 most relevant, high-rated, and recently published scientific or technical books on Amazon.com for the following topics: ${topics.join(', ')}.
+    
+    Instructions:
+    1. Search Amazon for technical monographs, textbooks, and professional guides.
+    2. Exclude non-scientific pop-science unless highly technical.
+    3. Return a JSON array of objects with: title, author, rating (out of 5), price, amazonUrl, and a 1-sentence description.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                author: { type: Type.STRING },
+                rating: { type: Type.NUMBER },
+                price: { type: Type.STRING },
+                amazonUrl: { type: Type.STRING },
+                description: { type: Type.STRING }
+              },
+              required: ["title", "author", "amazonUrl"]
+            }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (error) {
+      console.error("Amazon Search Error:", error);
+      return [];
+    }
+  },
+
+  async fetchScholarArticles(profiles: SocialProfiles): Promise<Partial<Article>[]> {
+    const ai = getAI();
+    const prompt = `USE GOOGLE SEARCH to find the official Google Scholar profile and full publication record for the researcher: "${profiles.name}". 
+    
+    If a Google Scholar URL is provided (${profiles.googleScholar || 'none'}), prioritize it.
+    
+    TASKS:
+    1. Locate their profile.
+    2. Extract a list of their published research papers (up to 30 most recent or significant).
+    3. For each paper, extract the following exactly:
+       - title: Full title of the paper.
+       - authors: Array of all contributing authors.
+       - abstract: A 2-3 sentence summary/abstract.
+       - year: The 4-digit publication year (as a string).
+       - citationCount: Current number of citations (integer).
+       - scholarUrl: Direct link to the paper on Google Scholar.
+       - tags: 2-3 technical keywords describing the field.
+
+    Return the result ONLY as a JSON array of objects. If no papers are found, return an empty array [].`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                authors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                abstract: { type: Type.STRING },
+                year: { type: Type.STRING },
+                citationCount: { type: Type.INTEGER },
+                scholarUrl: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ["title", "authors", "year"]
+            }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (error) {
+      console.error("Fetch Scholar Articles Error:", error);
+      return [];
+    }
+  },
+
+  async discoverAuthorNetwork(profiles: SocialProfiles) {
+    const ai = getAI();
+    const prompt = `Research the publication history and co-author network of ${profiles.name} using their Google Scholar profile (${profiles.googleScholar || 'Search by name'}).
+    
+    TASKS:
+    1. Find their top 15 most significant papers.
+    2. Identify their primary co-authors.
+    3. Explore co-authors of those co-authors (2 levels deep).
+    4. TO KEEP IT READABLE: Prioritize the top 3-5 most frequent or high-impact collaborators at each level.
+    5. IDENTIFY CLUSTERS: Group papers and authors into "Topic Clusters" (e.g., "Deep Learning", "Clinical Medicine").
+    
+    Return a JSON object with:
+    - nodes: Array of { id, name, type ('author' or 'paper'), cluster (string), level (0, 1, or 2) }
+    - links: Array of { source, target, type ('authored' or 'collaborated') }
+    - clusters: Array of { name, color } (Color should be a hex code suitable for dark mode).`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              nodes: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    name: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                    cluster: { type: Type.STRING },
+                    level: { type: Type.INTEGER }
+                  },
+                  required: ["id", "name", "type", "cluster"]
+                }
+              },
+              links: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    source: { type: Type.STRING },
+                    target: { type: Type.STRING },
+                    type: { type: Type.STRING }
+                  },
+                  required: ["source", "target"]
+                }
+              },
+              clusters: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    name: { type: Type.STRING },
+                    color: { type: Type.STRING }
+                  },
+                  required: ["name", "color"]
+                }
+              }
+            },
+            required: ["nodes", "links", "clusters"]
+          }
+        }
+      });
+      return JSON.parse(response.text || '{}');
+    } catch (error) {
+      console.error("Discover Author Network Error:", error);
+      return null;
     }
   },
 

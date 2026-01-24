@@ -1,8 +1,9 @@
 
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
-import { Article, Note, Book, NetworkViewMode } from '../types';
+import { Article, Note, Book, NetworkViewMode, SocialProfiles } from '../types';
 import { geminiService } from '../services/geminiService';
+import { dbService } from '../services/dbService';
 
 interface NetworkGraphProps {
   articles: Article[];
@@ -28,7 +29,10 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   const [viewMode, setViewMode] = useState<NetworkViewMode>('unified');
   const [isMining, setIsMining] = useState(false);
   const [miningProgress, setMiningProgress] = useState(0);
+  const [authorNetworkData, setAuthorNetworkData] = useState<any>(null);
   const fgRef = useRef<any>(null);
+
+  const socialProfiles = useMemo(() => dbService.getData().socialProfiles, []);
 
   // Set initial zoom and focus if provided
   useEffect(() => {
@@ -41,8 +45,33 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
   }, [focusNodeId, fgRef.current]);
 
+  const handleSyncScholar = async () => {
+    if (!socialProfiles.name) {
+      alert("Please enter your name in the Topics tab before syncing Scholar network.");
+      return;
+    }
+    setIsMining(true);
+    try {
+      const data = await geminiService.discoverAuthorNetwork(socialProfiles);
+      if (data && data.nodes && data.nodes.length > 0) {
+        setAuthorNetworkData(data);
+        setViewMode('author');
+      } else {
+        alert("Could not discover author network. Ensure your name/scholar URL is correct and public.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error building research network.");
+    }
+    setIsMining(false);
+  };
+
   // Process data into Graph format (Nodes & Links)
   const graphData = useMemo(() => {
+    if (viewMode === 'author' && authorNetworkData) {
+      return authorNetworkData;
+    }
+
     const nodes: any[] = [];
     const links: any[] = [];
     
@@ -50,7 +79,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     const uniqueDatasets = new Set<string>();
     articles.forEach(a => {
       if (a.dataLocation) uniqueDatasets.add(a.dataLocation);
-      // Also treat specific tags as datasets if they are frequently used
       a.tags.forEach(t => {
         if (t.toLowerCase().includes('data') || t.toLowerCase().includes('set')) {
           uniqueDatasets.add(t);
@@ -74,7 +102,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           color: '#818cf8'
         });
 
-        // Add citation links (Article -> Article)
         if (article.references) {
           article.references.forEach((refTitle: string) => {
             const target = articles.find((a: Article) => a.title.toLowerCase().includes(refTitle.toLowerCase()) || refTitle.toLowerCase().includes(a.title.toLowerCase()));
@@ -90,7 +117,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           });
         }
 
-        // Add Dataset mapping links
         if (viewMode === 'datasets') {
            if (article.dataLocation) {
              links.push({
@@ -161,7 +187,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           color: '#f59e0b'
         });
         
-        // Find links from articles to books via topics (heuristic)
         articles.forEach(art => {
            const sharedTag = art.tags.find(t => book.title.toLowerCase().includes(t.toLowerCase()));
            if (sharedTag) {
@@ -177,7 +202,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
 
     return { nodes, links };
-  }, [articles, notes, books, viewMode, focusNodeId]);
+  }, [articles, notes, books, viewMode, focusNodeId, authorNetworkData]);
 
   const handleMineCitations = async () => {
     if (isMining) return;
@@ -209,10 +234,10 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
             <span>🕸️</span> Networks
           </h2>
-          <p className="text-slate-400 mt-1">Visualize citations, conceptual links, and dataset clusters.</p>
+          <p className="text-slate-400 mt-1">Visualize citations, conceptual links, and research clusters.</p>
         </div>
         
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
            {focusNodeId && (
               <button 
                 onClick={onClearFocus}
@@ -222,7 +247,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
               </button>
            )}
            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex">
-             {(['notes', 'articles', 'unified', 'datasets'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
+             {(['notes', 'articles', 'unified', 'datasets', 'author'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
                <button
                  key={mode}
                  onClick={() => setViewMode(mode)}
@@ -230,55 +255,78 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                    viewMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                  }`}
                >
-                 {mode}
+                 {mode === 'author' ? 'My Articles' : mode.charAt(0).toUpperCase() + mode.slice(1)}
                </button>
              ))}
            </div>
            
-           <button 
-             onClick={handleMineCitations}
-             disabled={isMining}
-             className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-               isMining ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-slate-800 text-indigo-400 border border-indigo-500/20 hover:bg-slate-700'
-             }`}
-           >
-             {isMining ? (
-               <>
-                 <span className="w-3 h-3 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
-                 Mining... {miningProgress}%
-               </>
-             ) : (
-               <>🔍 Discover Citations</>
-             )}
-           </button>
+           <div className="flex gap-2">
+             <button 
+               onClick={handleSyncScholar}
+               disabled={isMining}
+               className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                 isMining ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
+               }`}
+             >
+               {isMining && viewMode === 'author' ? 'Crawl & Cluster...' : '🎓 My Articles'}
+             </button>
+             <button 
+               onClick={handleMineCitations}
+               disabled={isMining}
+               className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                 isMining ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-slate-800 text-indigo-400 border border-indigo-500/20 hover:bg-slate-700'
+               }`}
+             >
+               {isMining && viewMode !== 'author' ? (
+                 <>
+                   <span className="w-3 h-3 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
+                   Mining... {miningProgress}%
+                 </>
+               ) : (
+                 <>🔍 Discover Citations</>
+               )}
+             </button>
+           </div>
         </div>
       </header>
 
       <div className="flex-1 bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden relative shadow-2xl">
-        {graphData.nodes.length === 0 ? (
+        {(graphData.nodes.length === 0) ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-10">
              <span className="text-6xl mb-6 grayscale opacity-30">🕸️</span>
-             <h3 className="text-xl font-bold text-slate-400">Your Network is Empty</h3>
-             <p className="text-slate-600 mt-2 max-w-sm">Add articles to your library and create research notes to begin visualizing your conceptual map.</p>
+             <h3 className="text-xl font-bold text-slate-400">Knowledge Map Pending</h3>
+             <p className="text-slate-600 mt-2 max-w-sm">
+               {viewMode === 'author' 
+                 ? "Sync your Google Scholar profile to build your co-author network and topic clusters."
+                 : "Add articles to your library and create research notes to begin visualizing your conceptual map."}
+             </p>
           </div>
         ) : (
           <ForceGraph2D
             ref={fgRef}
             graphData={graphData}
-            nodeLabel="name"
-            nodeColor={(n: any) => n.color}
+            nodeLabel={(n: any) => `${n.name} ${n.cluster ? `(${n.cluster})` : ''}`}
+            nodeColor={(n: any) => {
+               if (viewMode === 'author' && authorNetworkData) {
+                  const cluster = authorNetworkData.clusters.find((c: any) => c.name === n.cluster);
+                  return cluster ? cluster.color : '#6366f1';
+               }
+               return n.color;
+            }}
             nodeRelSize={1}
-            nodeVal={(n: any) => n.val}
+            nodeVal={(n: any) => {
+               if (viewMode === 'author') return 12 - (n.level * 3);
+               return n.val || 10;
+            }}
             linkWidth={(l: any) => (l.type === 'citation' ? 2 : 1)}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
-            linkColor={(l: any) => l.color}
+            linkColor={(l: any) => l.color || 'rgba(255,255,255,0.1)'}
             linkCurvature="curvature"
             backgroundColor="transparent"
             onNodeClick={(node: any) => {
               if (node.type === 'article') onNavigateToArticle(node.id);
               else if (node.type === 'note') onNavigateToNote(node.id);
-              else if (node.type === 'dataset') console.log('Focus on dataset', node.name);
             }}
             nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const label = node.name;
@@ -292,37 +340,61 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
 
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
-              ctx.fillStyle = node.color;
+              
+              let nodeColor = node.color;
+              if (viewMode === 'author' && authorNetworkData) {
+                 const cluster = authorNetworkData.clusters.find((c: any) => c.name === node.cluster);
+                 nodeColor = cluster ? cluster.color : '#6366f1';
+              }
+
+              ctx.fillStyle = nodeColor;
               ctx.fillText(label, node.x, node.y);
               
-              // Draw node circle
+              const nodeSize = viewMode === 'author' ? (12 - (node.level * 3)) : (node.val || 10);
               ctx.beginPath();
-              ctx.arc(node.x, node.y, node.val / 2 / globalScale, 0, 2 * Math.PI, false);
-              ctx.fillStyle = node.color;
+              ctx.arc(node.x, node.y, nodeSize / 2 / globalScale, 0, 2 * Math.PI, false);
+              ctx.fillStyle = nodeColor;
               ctx.fill();
             }}
           />
         )}
 
         {/* Legend Overlay */}
-        <div className="absolute bottom-6 left-6 bg-slate-900/80 backdrop-blur-md border border-slate-800 p-4 rounded-2xl flex flex-col gap-3 shadow-xl">
-           <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">Graph Legend</h4>
-           <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-indigo-400"></span>
-              <span className="text-xs text-slate-300 font-medium">Research Paper</span>
-           </div>
-           <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-amber-400"></span>
-              <span className="text-xs text-slate-300 font-medium">Note / Annotation</span>
-           </div>
-           <div className="flex items-center gap-3">
-              <span className="w-3 h-3 rounded-full bg-[#10b981]"></span>
-              <span className="text-xs text-slate-300 font-medium">Dataset / Method Hub</span>
-           </div>
-           <div className="flex items-center gap-3 mt-1 border-t border-slate-800 pt-3">
-              <div className="w-6 h-0.5 bg-indigo-500/40"></div>
-              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-tight">Citation Link</span>
-           </div>
+        <div className="absolute bottom-6 left-6 bg-slate-900/80 backdrop-blur-md border border-slate-800 p-4 rounded-2xl flex flex-col gap-3 shadow-xl max-w-[240px]">
+           <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-1">
+             {viewMode === 'author' ? 'Topic Clusters' : 'Graph Legend'}
+           </h4>
+           {viewMode === 'author' && authorNetworkData ? (
+             <div className="space-y-2">
+               {authorNetworkData.clusters.map((c: any) => (
+                 <div key={c.name} className="flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color }}></span>
+                    <span className="text-xs text-slate-300 font-medium truncate">{c.name}</span>
+                 </div>
+               ))}
+               <div className="mt-3 pt-3 border-t border-slate-800 space-y-1">
+                  <p className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">Hierarchy</p>
+                  <p className="text-[10px] text-slate-400">Level 0: You</p>
+                  <p className="text-[10px] text-slate-400">Level 1: Co-authors</p>
+                  <p className="text-[10px] text-slate-400">Level 2: Deep Collaborators</p>
+               </div>
+             </div>
+           ) : (
+             <>
+               <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full bg-indigo-400"></span>
+                  <span className="text-xs text-slate-300 font-medium">Research Paper</span>
+               </div>
+               <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full bg-amber-400"></span>
+                  <span className="text-xs text-slate-300 font-medium">Note / Annotation</span>
+               </div>
+               <div className="flex items-center gap-3">
+                  <span className="w-3 h-3 rounded-full bg-[#10b981]"></span>
+                  <span className="text-xs text-slate-300 font-medium">Dataset Hub</span>
+               </div>
+             </>
+           )}
         </div>
       </div>
     </div>
