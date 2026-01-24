@@ -19,7 +19,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const handleSummarize = async () => {
     setLoading(true);
     const result = await geminiService.summarizeArticle(article.title, article.abstract);
-    setSummary(result);
+    setSummary(result ?? null);
     setLoading(false);
   };
 

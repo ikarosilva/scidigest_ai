@@ -167,8 +167,8 @@ export const dbService = {
     const data = dbService.getData();
     const note = data.notes.find((n: Note) => n.id === noteId);
     const article = data.articles.find((a: Article) => a.id === articleId);
-    if (note) note.articleIds = note.articleIds.filter(id => id !== articleId);
-    if (article) article.noteIds = article.noteIds.filter(id => id !== noteId);
+    if (note) note.articleIds = note.articleIds.filter((id: string) => id !== articleId);
+    if (article) article.noteIds = article.noteIds.filter((id: string) => id !== noteId);
     dbService.saveData(data);
     return data;
   },

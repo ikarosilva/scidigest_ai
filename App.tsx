@@ -202,7 +202,7 @@ const App: React.FC = () => {
       const q = searchQuery.toLowerCase();
       const matchesSearch = article.title.toLowerCase().includes(q) || 
                             article.abstract.toLowerCase().includes(q) ||
-                            article.authors.some(a => a.toLowerCase().includes(q));
+                            article.authors.some((a: string) => a.toLowerCase().includes(q));
       const matchesSentiment = filterSentiment === 'All' || article.userReviews.sentiment === filterSentiment;
       return matchesSearch && matchesSentiment;
     });
@@ -297,6 +297,26 @@ const App: React.FC = () => {
                 </div>
               </header>
 
+              <div className="mb-4 flex gap-4">
+                 <input 
+                   type="text"
+                   placeholder="Search library..."
+                   className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 flex-1"
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                 />
+                 <select 
+                    value={filterSentiment}
+                    onChange={(e) => setFilterSentiment(e.target.value as Sentiment | 'All')}
+                    className="bg-slate-900 border border-slate-800 text-slate-300 text-xs px-4 py-2 rounded-xl outline-none"
+                 >
+                    <option value="All">All Receptions</option>
+                    <option value="Positive">Positive</option>
+                    <option value="Neutral">Neutral</option>
+                    <option value="Negative">Negative</option>
+                 </select>
+              </div>
+
               {showImportBooks && (
                 <div className="bg-slate-900 border border-amber-500/20 rounded-3xl p-8 text-center space-y-6 animate-in slide-in-from-top-4 duration-300 shadow-xl shadow-amber-500/5">
                   <h3 className="text-xl font-bold text-slate-100 flex items-center justify-center gap-2">
@@ -337,7 +357,7 @@ const App: React.FC = () => {
                 ))}
                 {filteredArticles.length === 0 && !showImportBooks && (
                   <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-3xl border border-dashed border-slate-800">
-                    <p className="text-slate-500 italic">Your library is empty. Start by ingesting articles from "AI Recommends" or "Trending".</p>
+                    <p className="text-slate-500 italic">Your library is empty or no matches found. Start by ingesting articles from "AI Recommends" or "Trending".</p>
                   </div>
                 )}
               </div>
