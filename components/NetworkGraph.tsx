@@ -22,7 +22,8 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   const [viewMode, setViewMode] = useState<NetworkViewMode>('unified');
   const [isMining, setIsMining] = useState(false);
   const [miningProgress, setMiningProgress] = useState(0);
-  const fgRef = useRef<any>();
+  // Fix: Added null as initial value to useRef to avoid TypeScript error "Expected 1 arguments, but got 0"
+  const fgRef = useRef<any>(null);
 
   // Process data into Graph format (Nodes & Links)
   const graphData = useMemo(() => {
