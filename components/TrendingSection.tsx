@@ -55,8 +55,8 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
     isBookmarked: false,
     notes: `Added from trending research (Heat: ${paper.heatScore}%)`,
     userReadTime: 0,
-    isInQueue: inQueue,
-    queueDate: inQueue ? new Date().toISOString() : undefined,
+    // Fix: replaced deprecated isInQueue and queueDate with shelfIds
+    shelfIds: inQueue ? ['default-queue'] : [],
     userReviews: {
       sentiment: 'Unknown',
       summary: 'Highly trending topic in community.',
@@ -75,7 +75,8 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
       dateAdded: new Date().toISOString(),
       price: book.price,
       amazonUrl: book.amazonUrl,
-      isInQueue: true,
+      // Fix: replaced deprecated isInQueue with shelfIds
+      shelfIds: ['default-queue'],
       description: book.description,
       tags: selectedTopics.slice(0, 2)
     };

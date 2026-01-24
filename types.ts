@@ -52,6 +52,14 @@ export interface SocialProfiles {
   usePublicWebSearch?: boolean;
 }
 
+export interface Shelf {
+  id: string;
+  name: string;
+  color: string;
+  description?: string;
+  createdAt: string;
+}
+
 export interface Article {
   id: string;
   title: string;
@@ -72,19 +80,18 @@ export interface Article {
   references?: string[]; 
   userReadTime: number; // In seconds
   estimatedReadTime?: number; // In minutes
-  isInQueue?: boolean;
-  queueDate?: string;
+  shelfIds: string[]; // Replaces isInQueue
 }
 
 export interface Book {
   id: string;
   title: string;
   author: string;
-  rating: number; // 1-5 or 1-10
+  rating: number; 
   dateAdded: string;
   price?: string;
   amazonUrl?: string;
-  isInQueue?: boolean;
+  shelfIds: string[]; // Replaces isInQueue
   description?: string;
   tags?: string[];
 }
@@ -93,12 +100,13 @@ export interface AppState {
   articles: Article[];
   books: Book[];
   notes: Note[];
+  shelves: Shelf[];
   feedbackSubmissions: string[];
   lastModified: string; 
   version: string;
   aiConfig: AIConfig;
-  totalReadTime: number; // Total seconds spent in reader across all articles
+  totalReadTime: number;
   socialProfiles: SocialProfiles;
 }
 
-export type NetworkViewMode = 'notes' | 'articles' | 'unified' | 'datasets' | 'author';
+export type NetworkViewMode = 'notes' | 'articles' | 'topics' | 'unified' | 'datasets' | 'author';

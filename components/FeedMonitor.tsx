@@ -51,8 +51,8 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
     noteIds: [] as string[],
     userReadTime: 0,
     pdfUrl: (c as any).pdfUrl,
-    isInQueue: inQueue,
-    queueDate: inQueue ? new Date().toISOString() : undefined,
+    // Fix: replaced deprecated isInQueue and queueDate with shelfIds
+    shelfIds: inQueue ? ['default-queue'] : [],
     userReviews: {
       sentiment: 'Unknown',
       summary: 'Newly discovered in feed.',

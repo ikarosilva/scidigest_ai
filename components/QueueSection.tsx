@@ -19,8 +19,9 @@ const QueueSection: React.FC<QueueSectionProps> = ({ articles, books = [], onUpd
   const [sortBy, setSortBy] = useState<SortOption>('time');
 
   const queueItems = useMemo(() => {
-    const paperItems = articles.filter(a => a.isInQueue).map(a => ({ ...a, itemType: 'article' as const }));
-    const bookItems = books.filter(b => b.isInQueue).map(b => ({ ...b, itemType: 'book' as const }));
+    // Fix: replaced deprecated isInQueue check with shelfIds check for 'default-queue'
+    const paperItems = articles.filter(a => a.shelfIds.includes('default-queue')).map(a => ({ ...a, itemType: 'article' as const }));
+    const bookItems = books.filter(b => b.shelfIds.includes('default-queue')).map(b => ({ ...b, itemType: 'book' as const }));
     return [...paperItems, ...bookItems];
   }, [articles, books]);
 
@@ -38,10 +39,10 @@ const QueueSection: React.FC<QueueSectionProps> = ({ articles, books = [], onUpd
         });
       case 'time':
       default:
-        // Fix: Use itemType to safely access the relevant date property for sorting
+        // Fix: using dateAdded for books and date for articles since queueDate is removed
         return list.sort((a, b) => {
-          const dateB = b.itemType === 'book' ? b.dateAdded : b.queueDate;
-          const dateA = a.itemType === 'book' ? a.dateAdded : a.queueDate;
+          const dateB = b.itemType === 'book' ? b.dateAdded : (b as any).date;
+          const dateA = a.itemType === 'book' ? a.dateAdded : (a as any).date;
           return new Date(dateB || 0).getTime() - new Date(dateA || 0).getTime();
         });
     }
@@ -49,7 +50,11 @@ const QueueSection: React.FC<QueueSectionProps> = ({ articles, books = [], onUpd
 
   const handleRemove = (id: string, type: 'article' | 'book') => {
     if (type === 'article') {
-      onUpdateArticle(id, { isInQueue: false });
+      // Fix: removing 'default-queue' from shelfIds instead of setting isInQueue: false
+      const art = articles.find(a => a.id === id);
+      if (art) {
+        onUpdateArticle(id, { shelfIds: art.shelfIds.filter(sid => sid !== 'default-queue') });
+      }
     } else {
       // For books, we just toggle the flag in state (assuming db handles persistence)
       const data = (window as any).dbData; // Simple global access for demonstration

@@ -1,12 +1,20 @@
 
-import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles } from '../types';
+import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
 const INTERESTS_KEY = 'scidigest_interests_v1';
 const FEEDS_KEY = 'scidigest_feeds_v1';
 const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
+
+const DEFAULT_QUEUE_SHELF: Shelf = {
+  id: 'default-queue',
+  name: 'Queue',
+  color: '#818cf8',
+  description: 'Your primary reading list for immediate analysis.',
+  createdAt: new Date().toISOString()
+};
 
 const DEFAULT_INTERESTS = [
   "Machine Learning",
@@ -32,31 +40,6 @@ const DEFAULT_FEEDS: Feed[] = [
   { id: 'f4', name: 'Tensorflow Blog', url: 'https://blog.tensorflow.org/', active: false }
 ];
 
-const INITIAL_ARTICLES: Article[] = [
-  {
-    id: 'example-1',
-    title: 'Self-Supervised Learning in Wearable Biosignal Processing',
-    authors: ['Chen, L.', 'Smith, J.'],
-    abstract: 'A review of modern deep learning architectures applied to continuous physiological monitoring via wearable sensors.',
-    date: '2024-05-12',
-    year: '2024',
-    source: FeedSourceType.ARXIV,
-    rating: 9,
-    userReviews: {
-      sentiment: 'Positive',
-      summary: 'Highly cited work defining the standard for transformer-based biosignal analysis.',
-      lastUpdated: '2024-05-12',
-      citationCount: 142,
-    },
-    tags: ['Wearables', 'Deep Learning'],
-    isBookmarked: false,
-    notes: 'Welcome to your library.',
-    noteIds: [],
-    userReadTime: 0,
-    estimatedReadTime: 25
-  }
-];
-
 export const dbService = {
   getSyncKey: (): string => {
     let key = localStorage.getItem(SYNC_KEY_STORAGE);
@@ -80,9 +63,10 @@ export const dbService = {
   getData: (): AppState => {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return { 
-      articles: INITIAL_ARTICLES, 
+      articles: [], 
       books: [], 
       notes: [], 
+      shelves: [DEFAULT_QUEUE_SHELF],
       feedbackSubmissions: [],
       lastModified: new Date().toISOString(),
       version: APP_VERSION,
@@ -91,16 +75,32 @@ export const dbService = {
       socialProfiles: {}
     };
     const parsed = JSON.parse(data) as AppState;
+    
+    // Migration Logic
+    if (!parsed.shelves || parsed.shelves.length === 0) {
+      parsed.shelves = [DEFAULT_QUEUE_SHELF];
+    }
+    
+    parsed.articles = parsed.articles.map((a: any) => {
+      // Migrate isInQueue to shelfIds
+      if (a.isInQueue && (!a.shelfIds || a.shelfIds.length === 0)) {
+        return { ...a, shelfIds: ['default-queue'], userReadTime: a.userReadTime || 0 };
+      }
+      return { ...a, shelfIds: a.shelfIds || [], userReadTime: a.userReadTime || 0 };
+    });
+
+    parsed.books = parsed.books.map((b: any) => {
+      if (b.isInQueue && (!b.shelfIds || b.shelfIds.length === 0)) {
+        return { ...b, shelfIds: ['default-queue'] };
+      }
+      return { ...b, shelfIds: b.shelfIds || [] };
+    });
+
     parsed.lastModified = parsed.lastModified || new Date().toISOString();
     parsed.aiConfig = parsed.aiConfig || DEFAULT_AI_CONFIG;
     parsed.totalReadTime = parsed.totalReadTime || 0;
     parsed.socialProfiles = parsed.socialProfiles || {};
-    // Migration for articles
-    parsed.articles = parsed.articles.map(a => ({
-      ...a,
-      userReadTime: a.userReadTime || 0,
-      estimatedReadTime: a.estimatedReadTime || 20
-    }));
+    
     return parsed;
   },
   saveData: (data: AppState) => {
@@ -210,6 +210,27 @@ export const dbService = {
     dbService.saveData(data);
     return data;
   },
+  updateBook: (id: string, updates: Partial<Book>): AppState => {
+    const data = dbService.getData();
+    data.books = data.books.map((b: Book) => b.id === id ? { ...b, ...updates } : b);
+    dbService.saveData(data);
+    return data;
+  },
+  addShelf: (shelf: Shelf): AppState => {
+    const data = dbService.getData();
+    data.shelves.push(shelf);
+    dbService.saveData(data);
+    return data;
+  },
+  deleteShelf: (id: string): AppState => {
+    if (id === 'default-queue') return dbService.getData();
+    const data = dbService.getData();
+    data.shelves = data.shelves.filter(s => s.id !== id);
+    data.articles = data.articles.map(a => ({ ...a, shelfIds: a.shelfIds.filter(sid => sid !== id) }));
+    data.books = data.books.map(b => ({ ...b, shelfIds: b.shelfIds.filter(sid => sid !== id) }));
+    dbService.saveData(data);
+    return data;
+  },
   exportFullBackup: (): string => {
     const data = dbService.getData();
     const interests = dbService.getInterests();
@@ -224,16 +245,10 @@ export const dbService = {
       timestamp: new Date().toISOString() 
     }, null, 2);
   },
-  importFullBackup: (jsonString: string): { success: boolean; upgraded: boolean } => {
+  importFullBackup: (jsonString: string): { success: boolean, upgraded: boolean } => {
     try {
       const parsed = JSON.parse(jsonString);
       let upgraded = false;
-      const importedVersion = parsed.version || '1.0.0';
-      if (importedVersion !== APP_VERSION) {
-        if (importedVersion === '1.0.0') {
-          upgraded = true;
-        }
-      }
       if (parsed.data && parsed.interests) {
         dbService.saveData(parsed.data);
         dbService.saveInterests(parsed.interests);

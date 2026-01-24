@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Article, Sentiment, Note } from '../types';
+import { Article, Sentiment, Note, Shelf } from '../types';
 import { geminiService } from '../services/geminiService';
+import { dbService } from '../services/dbService';
 
 interface ArticleCardProps {
   article: Article;
@@ -14,7 +15,9 @@ interface ArticleCardProps {
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, onNavigateToNote, onRead }) => {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [researching, setResearching] = useState(false);
+  const [showShelfMenu, setShowShelfMenu] = useState(false);
+
+  const shelves = dbService.getData().shelves;
 
   const handleSummarize = async () => {
     setLoading(true);
@@ -23,18 +26,20 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     setLoading(false);
   };
 
-  const handleUpdateReviews = async () => {
-    setResearching(true);
-    const result = await geminiService.analyzeSentiment(article);
-    onUpdate(article.id, { userReviews: result });
-    setResearching(false);
+  const handleDeepResearch = () => {
+    const query = encodeURIComponent(`Find recent citations, related clinical trials, and critical reviews of the paper: "${article.title}" by ${article.authors.join(', ')}. Specifically check for updates since ${article.year}.`);
+    window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
   };
 
-  const toggleQueue = () => {
-    onUpdate(article.id, { 
-      isInQueue: !article.isInQueue,
-      queueDate: !article.isInQueue ? new Date().toISOString() : undefined 
-    });
+  const toggleShelf = (shelfId: string) => {
+    const isCurrentlyIn = article.shelfIds?.includes(shelfId);
+    let newShelfIds = article.shelfIds || [];
+    if (isCurrentlyIn) {
+      newShelfIds = newShelfIds.filter(id => id !== shelfId);
+    } else {
+      newShelfIds = [...newShelfIds, shelfId];
+    }
+    onUpdate(article.id, { shelfIds: newShelfIds });
   };
 
   const sentimentColors: Record<Sentiment, string> = {
@@ -43,8 +48,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     Negative: 'bg-red-500/20 text-red-400 border-red-500/30',
     Unknown: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
   };
-
-  const linkedNotes = allNotes.filter((n: Note) => article.noteIds.includes(n.id));
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card relative">
@@ -86,23 +89,20 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
       
-      {/* Linked Notes Section */}
-      {linkedNotes.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
-          <span className="text-[9px] uppercase font-bold text-slate-500 tracking-widest block w-full mb-1">Linked Notes</span>
-          {linkedNotes.map((note: Note) => (
-            <button 
-              key={note.id}
-              onClick={() => onNavigateToNote(note.id)}
-              className="text-[10px] bg-indigo-500/10 hover:bg-indigo-500/30 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded transition-all flex items-center gap-1"
-            >
-              <span>✍️</span> {note.title}
-            </button>
-          ))}
+      {article.shelfIds?.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-4">
+           {article.shelfIds.map(sid => {
+             const s = shelves.find(sh => sh.id === sid);
+             return s ? (
+               <span key={sid} className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500 flex items-center gap-1.5 bg-slate-950/50">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }}></span>
+                  {s.name}
+               </span>
+             ) : null;
+           })}
         </div>
       )}
 
-      {/* Metrics Row */}
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-800/50">
         <div className="flex flex-col">
           <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Scholar Impact</span>
@@ -113,11 +113,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
              <span className="text-[10px] text-slate-500">citations</span>
           </div>
         </div>
-        {article.userReviews.citedByUrl && (
-          <a href={article.userReviews.citedByUrl} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-400 underline font-medium self-end mb-0.5">
-            Google Scholar →
-          </a>
-        )}
+        <button 
+          onClick={handleDeepResearch}
+          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold ml-auto flex items-center gap-1 bg-emerald-500/5 px-2 py-1 rounded-lg border border-emerald-500/10 transition-all"
+        >
+          <span>🌐</span> Perplexity Deep Research
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
@@ -128,40 +129,56 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
         ))}
       </div>
 
-      <div className="mb-4 space-y-3">
-        {summary && (
-          <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-300 border-l-4 border-indigo-500 whitespace-pre-line">
-            <strong className="text-indigo-400">AI Summary:</strong><br/>
-            {summary}
-          </div>
-        )}
-
-        <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Community Sentiment</span>
-            <button 
-              onClick={handleUpdateReviews} 
-              disabled={researching}
-              className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors disabled:opacity-50"
-            >
-              {researching ? '🔄 Researching Impact...' : '🔍 Update Stats'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-300 italic">"{article.userReviews.summary}"</p>
+      {summary && (
+        <div className="bg-slate-950 p-3 rounded-lg text-sm text-slate-300 border-l-4 border-indigo-500 whitespace-pre-line mb-4 animate-in fade-in slide-in-from-left-2">
+          <strong className="text-indigo-400">AI Summary:</strong><br/>
+          {summary}
         </div>
-      </div>
+      )}
 
-      <div className="flex gap-2">
-        <button 
-          onClick={toggleQueue}
-          className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all border ${
-            article.isInQueue 
-            ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20' 
-            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-indigo-400 hover:border-indigo-500/30'
-          }`}
-        >
-          {article.isInQueue ? '⏳ In Queue' : '➕ Queue'}
-        </button>
+      <div className="flex gap-2 relative">
+        <div className="relative flex-1">
+          <button 
+            onClick={() => setShowShelfMenu(!showShelfMenu)}
+            className={`w-full text-xs font-bold py-2 rounded-lg transition-all border flex items-center justify-center gap-2 ${
+              article.shelfIds?.length > 0 
+              ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 hover:bg-amber-500/20' 
+              : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-indigo-400 hover:border-indigo-500/30'
+            }`}
+          >
+            {article.shelfIds?.length > 0 ? `📂 On ${article.shelfIds.length} Shelves` : '📥 Add to Shelf'}
+          </button>
+          
+          {showShelfMenu && (
+            <div className="absolute bottom-full left-0 mb-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-30 p-2 animate-in zoom-in-95 duration-150 origin-bottom-left">
+              <div className="text-[9px] uppercase font-black text-slate-500 p-2 tracking-widest border-b border-slate-700 mb-1">Select Shelves</div>
+              {shelves.map(shelf => (
+                <button
+                  key={shelf.id}
+                  onClick={() => toggleShelf(shelf.id)}
+                  className="w-full flex items-center justify-between p-2 hover:bg-slate-700 rounded-lg transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shelf.color }}></div>
+                     <span className="text-xs text-slate-200">{shelf.name}</span>
+                  </div>
+                  {article.shelfIds?.includes(shelf.id) && (
+                    <span className="text-indigo-400 text-xs">✓</span>
+                  )}
+                </button>
+              ))}
+              <div className="p-1 mt-1 border-t border-slate-700">
+                <button 
+                  onClick={() => setShowShelfMenu(false)}
+                  className="w-full text-[10px] text-slate-500 hover:text-white py-1 transition-colors"
+                >
+                  Close Menu
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <button 
           onClick={handleSummarize}
           disabled={loading}

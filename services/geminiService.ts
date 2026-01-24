@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles } from "../types";
+import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed } from "../types";
 
 // Always initialize GoogleGenAI with a named parameter using process.env.API_KEY directly
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -79,14 +79,13 @@ export const geminiService = {
     ${profileContext}
     
     INSTRUCTIONS:
-    1. If a Full Name is provided and "Public Web Search" is enabled, perform a search for that individual's publications and topics.
-    2. If a URL (like LinkedIn or Medium) is restricted or difficult to parse directly, extract the likely person from the URL and search for their work on Scholar or ResearchGate.
-    3. Return a JSON array of technical research topics.
-    4. Provide at most 15 specific, high-quality strings. Exclude generic terms like 'Research' or 'Science'.`;
+    1. Perform a live Google Search for this individual's publications and topics.
+    2. Return a JSON array of technical research topics.
+    3. Provide at most 15 specific, high-quality strings.`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -104,18 +103,59 @@ export const geminiService = {
     }
   },
 
+  /**
+   * Discovers scientific feeds (RSS, Atom, JSON) based on topics
+   */
+  async discoverScientificFeeds(topics: string[]): Promise<any[]> {
+    const ai = getAI();
+    const prompt = `Find professional scientific and technical RSS/Atom feeds, journal alert pages, or blog notification URLs for these research topics: ${topics.join(', ')}.
+    
+    STRICT CATEGORIES TO EXPLORE:
+    - Conferences (e.g. NeurIPS, ICML, CVPR)
+    - High-impact Journals (Nature, Science, Lancet, NEJM)
+    - Pre-print servers (arXiv sections, MedRxiv, bioRxiv)
+    - Top-tier Labs/Blogs (HuggingFace, DeepMind, OpenAI, Microsoft Research)
+    
+    Return a JSON array of high-quality, verified sources.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING, description: "Name of the journal, conference or blog" },
+                url: { type: Type.STRING, description: "The direct RSS/Atom feed URL or the main alert page URL" },
+                type: { type: Type.STRING, description: "One of: Conference, Journal, Pre-print, Blog, Lab" },
+                description: { type: Type.STRING, description: "1-sentence on why this matches the research topics" }
+              },
+              required: ["name", "url", "type"]
+            }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (error) {
+      console.error("Discover Scientific Feeds Error:", error);
+      return [];
+    }
+  },
+
   async searchAmazonBooks(topics: string[]): Promise<Partial<Book>[]> {
     const ai = getAI();
     const prompt = `Find the 10 most relevant, high-rated, and recently published scientific or technical books on Amazon.com for the following topics: ${topics.join(', ')}.
     
-    Instructions:
-    1. Search Amazon for technical monographs, textbooks, and professional guides.
-    2. Exclude non-scientific pop-science unless highly technical.
-    3. Return a JSON array of objects with: title, author, rating (out of 5), price, amazonUrl, and a 1-sentence description.`;
+    Return a JSON array of objects with: title, author, rating (out of 5), price, amazonUrl, and a 1-sentence description.`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -145,28 +185,29 @@ export const geminiService = {
   },
 
   async fetchScholarArticles(profiles: SocialProfiles): Promise<Partial<Article>[]> {
+    const targetIdentity = profiles.googleScholar || profiles.name;
+    console.log("Triggering fetchScholarArticles for:", targetIdentity);
     const ai = getAI();
-    const prompt = `USE GOOGLE SEARCH to find the official Google Scholar profile and full publication record for the researcher: "${profiles.name}". 
     
-    If a Google Scholar URL is provided (${profiles.googleScholar || 'none'}), prioritize it.
+    const prompt = `CRITICAL TASK: Use the googleSearch tool to access the official Google Scholar profile for: "${targetIdentity}". 
     
-    TASKS:
-    1. Locate their profile.
-    2. Extract a list of their published research papers (up to 30 most recent or significant).
-    3. For each paper, extract the following exactly:
-       - title: Full title of the paper.
-       - authors: Array of all contributing authors.
-       - abstract: A 2-3 sentence summary/abstract.
-       - year: The 4-digit publication year (as a string).
-       - citationCount: Current number of citations (integer).
-       - scholarUrl: Direct link to the paper on Google Scholar.
-       - tags: 2-3 technical keywords describing the field.
+    ${profiles.googleScholar ? `Direct URL provided: ${profiles.googleScholar}. PLEASE VISIT THIS URL TO EXTRACT DATA.` : ''}
+    
+    If you find a match, extract a list of their published research papers.
+    For each paper, extract:
+    - title: Full title.
+    - authors: Array of authors.
+    - abstract: Brief summary.
+    - year: 4-digit year.
+    - citationCount: citations as integer.
+    - scholarUrl: Direct Google Scholar URL.
+    - tags: 2-3 keywords.
 
-    Return the result ONLY as a JSON array of objects. If no papers are found, return an empty array [].`;
+    Return the result ONLY as a JSON array. Return [] if none found.`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -189,32 +230,28 @@ export const geminiService = {
           }
         }
       });
-      return JSON.parse(response.text || '[]');
+      const result = JSON.parse(response.text || '[]');
+      console.log("Scholar Sync Result Count:", result.length);
+      return result;
     } catch (error) {
       console.error("Fetch Scholar Articles Error:", error);
-      return [];
+      throw error;
     }
   },
 
   async discoverAuthorNetwork(profiles: SocialProfiles) {
     const ai = getAI();
-    const prompt = `Research the publication history and co-author network of ${profiles.name} using their Google Scholar profile (${profiles.googleScholar || 'Search by name'}).
-    
-    TASKS:
-    1. Find their top 15 most significant papers.
-    2. Identify their primary co-authors.
-    3. Explore co-authors of those co-authors (2 levels deep).
-    4. TO KEEP IT READABLE: Prioritize the top 3-5 most frequent or high-impact collaborators at each level.
-    5. IDENTIFY CLUSTERS: Group papers and authors into "Topic Clusters" (e.g., "Deep Learning", "Clinical Medicine").
+    const targetIdentity = profiles.googleScholar || profiles.name;
+    const prompt = `Research the co-author network of ${targetIdentity} using their Google Scholar profile. Identify clusters and papers.
     
     Return a JSON object with:
-    - nodes: Array of { id, name, type ('author' or 'paper'), cluster (string), level (0, 1, or 2) }
-    - links: Array of { source, target, type ('authored' or 'collaborated') }
-    - clusters: Array of { name, color } (Color should be a hex code suitable for dark mode).`;
+    - nodes: Array of { id, name, type, cluster, level }
+    - links: Array of { source, target, type }
+    - clusters: Array of { name, color }`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -232,35 +269,12 @@ export const geminiService = {
                     type: { type: Type.STRING },
                     cluster: { type: Type.STRING },
                     level: { type: Type.INTEGER }
-                  },
-                  required: ["id", "name", "type", "cluster"]
+                  }
                 }
               },
-              links: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    source: { type: Type.STRING },
-                    target: { type: Type.STRING },
-                    type: { type: Type.STRING }
-                  },
-                  required: ["source", "target"]
-                }
-              },
-              clusters: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    name: { type: Type.STRING },
-                    color: { type: Type.STRING }
-                  },
-                  required: ["name", "color"]
-                }
-              }
-            },
-            required: ["nodes", "links", "clusters"]
+              links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source: { type: Type.STRING }, target: { type: Type.STRING } } } },
+              clusters: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, color: { type: Type.STRING } } } }
+            }
           }
         }
       });
@@ -273,13 +287,11 @@ export const geminiService = {
 
   async discoverReferences(article: Article): Promise<string[]> {
     const ai = getAI();
-    const prompt = `Identify the top 5 most important papers or works cited by the article: "${article.title}" by ${article.authors.join(', ')}.
-    Search for the bibliography or reference list of this specific paper.
-    Return a JSON array of strings, where each string is a "Title, Year" of a cited paper.`;
+    const prompt = `Find the bibliography of: "${article.title}". Return a JSON array of strings: "Title, Year".`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -306,22 +318,80 @@ export const geminiService = {
     return response.text;
   },
 
-  /**
-   * Searches the web for an article and performs sentiment analysis plus citation metrics retrieval.
-   */
-  async analyzeSentiment(article: Article): Promise<UserReviews> {
+  async critiqueArticle(title: string, abstract: string) {
     const ai = getAI();
-    const prompt = `Research the scientific community's reception and impact of the article: "${article.title}" by ${article.authors.join(', ')}.
-    Search for:
-    1. Online discussions and academic blogs.
-    2. Google Scholar citation count (approximate "cited by").
-    3. Sentiment of the general user/researcher base.
+    const prompt = `As a senior peer reviewer for a high-impact journal, provide a critical appraisal of the following research based on its abstract. 
     
-    Return JSON with sentiment (Positive/Neutral/Negative), a summary, the citation count as an integer, and a Google Scholar URL if found.`;
+    Title: ${title}
+    Abstract: ${abstract}
+    
+    Provide your critique in exactly 4 sections:
+    1. **Methodological Soundness**: Potential weaknesses or assumptions.
+    2. **Statistical Considerations**: Concerns regarding sample size, data processing, or bias.
+    3. **Novelty vs. Incrementalism**: Does this push the field forward?
+    4. **Critical Consensus**: How this might be received by the broader community.
+    
+    Keep it professional, objective, and dense.`;
+    
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Critique Article Error:", error);
+      return "Unable to generate critique at this time.";
+    }
+  },
+
+  async analyzeAIProbability(title: string, abstract: string) {
+    const ai = getAI();
+    const prompt = `Act as a forensic scientific linguist. Analyze the following article title and abstract for markers of Large Language Model (AI) generation. 
+    Look for:
+    - Over-polishing and lack of domain-specific "jargon quirks".
+    - Repetitive structural patterns typical of default LLM output.
+    - Consistency across highly complex technical claims.
+
+    Title: ${title}
+    Abstract: ${abstract}
+    
+    Return your assessment as a JSON object with:
+    - probability: number (0-100)
+    - assessment: string (1-sentence conclusion)
+    - markers: string[] (List 2-3 technical reasons for your score)`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              probability: { type: Type.NUMBER },
+              assessment: { type: Type.STRING },
+              markers: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["probability", "assessment", "markers"]
+          }
+        }
+      });
+      return JSON.parse(response.text || '{}');
+    } catch (error) {
+      console.error("AI Detection Error:", error);
+      return { probability: 0, assessment: "Error analyzing content.", markers: [] };
+    }
+  },
+
+  async analyzeSentiment(article: Article): Promise<UserReviews> {
+    const ai = getAI();
+    const prompt = `Research the impact of: "${article.title}". Return JSON with sentiment, summary, citationCount, and citedByUrl.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -333,42 +403,31 @@ export const geminiService = {
               summary: { type: Type.STRING },
               citationCount: { type: Type.INTEGER },
               citedByUrl: { type: Type.STRING }
-            },
-            required: ["sentiment", "summary"]
+            }
           }
         }
       });
-
       const result = JSON.parse(response.text || '{}');
       return {
         sentiment: result.sentiment as Sentiment || 'Unknown',
-        summary: result.summary || 'Sentiment analysis failed.',
+        summary: result.summary || 'Analysis complete.',
         citationCount: result.citationCount,
         citedByUrl: result.citedByUrl,
         lastUpdated: new Date().toISOString().split('T')[0]
       };
     } catch (error) {
       console.error("Sentiment Analysis Error:", error);
-      return { sentiment: 'Unknown', summary: 'Error performing live sentiment research.', lastUpdated: new Date().toISOString().split('T')[0] };
+      return { sentiment: 'Unknown', summary: 'Error performing live research.', lastUpdated: new Date().toISOString().split('T')[0] };
     }
   },
 
-  /**
-   * Fetches trending research based on topics and time scale.
-   */
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Find the most trending and discussed scientific research papers from the last ${timeScale} in the following fields: ${topics.join(', ')}.
-    Look for:
-    - High citation velocity.
-    - Significant social media/academic blog buzz.
-    - Breakthrough results.
-    
-    Return a JSON array of objects with: title, authors (array), year, source, citationCount, snippet, heatScore (0-100), and scholarUrl.`;
+    const prompt = `Find trending papers in: ${topics.join(', ')} from the last ${timeScale}. Return a JSON array of objects.`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -386,8 +445,7 @@ export const geminiService = {
                 snippet: { type: Type.STRING },
                 heatScore: { type: Type.INTEGER },
                 scholarUrl: { type: Type.STRING }
-              },
-              required: ["title", "authors", "year", "heatScore"]
+              }
             }
           }
         }
@@ -399,27 +457,10 @@ export const geminiService = {
     }
   },
 
-  /**
-   * Processes raw book data, filtering for scientific relevance based on provided topics.
-   */
   async filterBooks(rawJson: any[], topics: string[]): Promise<Book[]> {
     const ai = getAI();
-
-    const bookSummaries = rawJson
-      .filter(item => item.book)
-      .map(item => ({ title: item.book, rating: item.rating }))
-      .slice(0, 150);
-
-    const prompt = `
-      You are a specialized librarian. Filter the following list of books.
-      Rules:
-      1. Remove all fiction (novels, plays, short stories).
-      2. Remove all non-fiction that is NOT related to these specific research interests: ${topics.join(', ')}.
-      3. For the remaining scientific/technical books, format them as a JSON array.
-      
-      Books to process:
-      ${JSON.stringify(bookSummaries)}
-    `;
+    const bookSummaries = rawJson.filter(item => item.book).map(item => ({ title: item.book, rating: item.rating })).slice(0, 100);
+    const prompt = `Filter these books for scientific relevance to: ${topics.join(', ')}. Return JSON array. \n${JSON.stringify(bookSummaries)}`;
 
     try {
       const response = await ai.models.generateContent({
@@ -429,18 +470,10 @@ export const geminiService = {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                rating: { type: Type.NUMBER }
-              },
-              required: ["title", "rating"]
-            }
+            items: { type: Type.OBJECT, properties: { title: { type: Type.STRING }, rating: { type: Type.NUMBER } } }
           }
         }
       });
-
       const filtered = JSON.parse(response.text || '[]');
       return filtered.map((b: any) => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -450,17 +483,17 @@ export const geminiService = {
         dateAdded: new Date().toISOString()
       }));
     } catch (error) {
-      console.error("Gemini Filter Error:", error);
+      console.error("Filter Books Error:", error);
       return [];
     }
   },
 
   async generateAPACitations(articles: Article[]) {
     const ai = getAI();
-    const list = articles.map(a => `- Title: ${a.title}, Authors: ${a.authors.join(', ')}, Year: ${a.year}, Source: ${a.source}`).join('\n');
+    const list = articles.map(a => `- ${a.title}`).join('\n');
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Format the following research papers as a perfect APA-style bibliography list. Do not add any extra text, just the citations: \n${list}`,
+      contents: `Format as APA bibliography: \n${list}`,
     });
     return response.text;
   }

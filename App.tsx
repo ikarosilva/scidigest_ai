@@ -6,7 +6,7 @@ import ArticleCard from './components/ArticleCard';
 import BookCard from './components/BookCard';
 import FeedMonitor from './components/FeedMonitor';
 import FeedsSection from './components/FeedsSection';
-import QueueSection from './components/QueueSection';
+import ShelvesSection from './components/ShelvesSection';
 import TrendingSection from './components/TrendingSection';
 import NotesSection from './components/NotesSection';
 import SettingsSection from './components/SettingsSection';
@@ -18,7 +18,7 @@ import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
 import { cloudSyncService } from './services/cloudSyncService';
-import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState, SocialProfiles, FeedSourceType } from './types';
+import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState, SocialProfiles, FeedSourceType, Shelf } from './types';
 
 const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('feed');
@@ -42,6 +42,13 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [filterSentiment, setFilterSentiment] = useState<Sentiment | 'All'>('All');
+
+  // Listen for custom events (from cards not managed directly by state)
+  useEffect(() => {
+    const handleUpdate = () => setData(dbService.getData());
+    window.addEventListener('db-update', handleUpdate);
+    return () => window.removeEventListener('db-update', handleUpdate);
+  }, []);
 
   // Cloud Sync Integration
   useEffect(() => {
@@ -134,6 +141,19 @@ const App: React.FC = () => {
     if (syncStatus === 'synced') performCloudSync(newData);
   };
 
+  const handleUpdateBook = (id: string, updates: Partial<Book>) => {
+    const newData = dbService.updateBook(id, updates);
+    setData({ ...newData });
+    if (syncStatus === 'synced') performCloudSync(newData);
+  };
+
+  const handleUpdateShelves = (newShelves: Shelf[]) => {
+    const newData = { ...data, shelves: newShelves };
+    setData(newData);
+    dbService.saveData(newData);
+    if (syncStatus === 'synced') performCloudSync(newData);
+  };
+
   const handleAddReadTime = (id: string, seconds: number) => {
     const newData = dbService.addReadTime(id, seconds);
     setData({ ...newData });
@@ -148,14 +168,32 @@ const App: React.FC = () => {
   };
 
   const handleSyncScholarArticles = async () => {
-    if (!data.socialProfiles.name) {
-      alert("Please provide your name in the Topics tab first.");
-      return;
-    }
-    setIsSyncingScholar(true);
-    try {
-      const scholarPapers = await geminiService.fetchScholarArticles(data.socialProfiles);
+    let currentProfiles = { ...data.socialProfiles };
+    
+    if (!currentProfiles.name && !currentProfiles.googleScholar) {
+      const input = prompt("Enter your Full Name OR paste your Google Scholar Profile URL:");
+      if (!input || !input.trim()) return;
       
+      const trimmedInput = input.trim();
+      if (trimmedInput.startsWith('http')) {
+        currentProfiles.googleScholar = trimmedInput;
+      } else {
+        currentProfiles.name = trimmedInput;
+      }
+      handleUpdateSocialProfiles(currentProfiles);
+    }
+    
+    setIsSyncingScholar(true);
+    console.log("Starting Scholar Sync for:", currentProfiles.name || currentProfiles.googleScholar);
+
+    try {
+      const scholarPapers = await geminiService.fetchScholarArticles(currentProfiles);
+      
+      if (!scholarPapers || scholarPapers.length === 0) {
+        alert("No publications found. Try refining your name or ensuring the profile URL is correct.");
+        return;
+      }
+
       const existingTitles = new Set(data.articles.map(a => a.title.toLowerCase().trim()));
       const newArticles: Article[] = [];
 
@@ -170,13 +208,14 @@ const App: React.FC = () => {
             date: `${p.year || '2024'}-01-01`,
             year: p.year || 'Unknown',
             source: FeedSourceType.GOOGLE_SCHOLAR,
-            rating: 10, // Default for self-publications
+            rating: 10,
             tags: p.tags || ['Publication'],
             isBookmarked: true,
             notes: 'Imported from your Google Scholar profile.',
             noteIds: [],
             userReadTime: 0,
             estimatedReadTime: 20,
+            shelfIds: [],
             userReviews: {
               sentiment: 'Positive',
               summary: 'Your own publication discovered via Scholar.',
@@ -193,11 +232,11 @@ const App: React.FC = () => {
         alert(`Successfully imported ${newArticles.length} new publications!`);
         if (syncStatus === 'synced') performCloudSync(updatedData);
       } else {
-        alert("Your library is already up to date with your Scholar profile.");
+        alert("Your library is already up to date with your profile.");
       }
     } catch (err) {
-      console.error("Scholar Sync Error:", err);
-      alert("Failed to sync Scholar articles. Ensure your API key is valid and try again later.");
+      console.error("Scholar Sync Critical Error:", err);
+      alert("Failed to connect to search service. Ensure your API key is valid and the profile is public.");
     } finally {
       setIsSyncingScholar(false);
     }
@@ -321,11 +360,14 @@ const App: React.FC = () => {
             />
           )}
           
-          {currentTab === 'queue' && (
-             <QueueSection 
+          {currentTab === 'shelves' && (
+             <ShelvesSection 
                articles={data.articles}
                books={data.books}
+               shelves={data.shelves}
                onUpdateArticle={handleUpdateArticle}
+               onUpdateBook={handleUpdateBook}
+               onUpdateShelves={handleUpdateShelves}
                onRead={handleOpenReader}
                onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
                allNotes={data.notes}
@@ -389,28 +431,35 @@ const App: React.FC = () => {
                   <h2 className="text-2xl font-bold text-slate-100">Your Library</h2>
                   <p className="text-slate-400">Manage your research collection and books.</p>
                 </div>
-                <div className="flex gap-3">
-                  <button 
-                    onClick={handleSyncScholarArticles}
-                    disabled={isSyncingScholar}
-                    className={`px-5 py-2 rounded-xl text-sm font-medium transition-all border ${
-                      isSyncingScholar ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
-                    }`}
-                  >
-                    {isSyncingScholar ? 'Syncing Scholar...' : '🎓 Sync My Publications'}
-                  </button>
-                  <button 
-                    onClick={() => setShowImportBooks(!showImportBooks)}
-                    className={`px-5 py-2 rounded-xl text-sm font-medium transition-colors border ${showImportBooks ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
-                  >
-                    {showImportBooks ? 'Close Ingestion' : '📥 Import Books'}
-                  </button>
-                  <button 
-                    onClick={() => exportService.downloadFile(exportService.generateBibTeX(data.articles), 'scidigest_export.bib', 'text/plain')}
-                    className="bg-indigo-500/10 text-indigo-400 px-5 py-2 rounded-xl text-sm font-medium hover:bg-indigo-500/20 transition-colors border border-indigo-500/20"
-                  >
-                    📄 Export BibTeX
-                  </button>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={handleSyncScholarArticles}
+                      disabled={isSyncingScholar}
+                      className={`px-5 py-2 rounded-xl text-sm font-medium transition-all border ${
+                        isSyncingScholar ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      {isSyncingScholar ? 'Syncing Scholar...' : '🎓 Sync My Publications'}
+                    </button>
+                    <button 
+                      onClick={() => setShowImportBooks(!showImportBooks)}
+                      className={`px-5 py-2 rounded-xl text-sm font-medium transition-colors border ${showImportBooks ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
+                    >
+                      {showImportBooks ? 'Close Ingestion' : '📥 Import Books'}
+                    </button>
+                    <button 
+                      onClick={() => exportService.downloadFile(exportService.generateBibTeX(data.articles), 'scidigest_export.bib', 'text/plain')}
+                      className="bg-indigo-500/10 text-indigo-400 px-5 py-2 rounded-xl text-sm font-medium hover:bg-indigo-500/20 transition-colors border border-indigo-500/20"
+                    >
+                      📄 Export BibTeX
+                    </button>
+                  </div>
+                  {(!data.socialProfiles.name && !data.socialProfiles.googleScholar) && (
+                    <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20 flex items-center gap-1.5">
+                      <span className="animate-pulse">💡</span> Tip: Sync will ask for your name or profile URL if not set.
+                    </span>
+                  )}
                 </div>
               </header>
 

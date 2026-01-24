@@ -32,7 +32,9 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   const [authorNetworkData, setAuthorNetworkData] = useState<any>(null);
   const fgRef = useRef<any>(null);
 
-  const socialProfiles = useMemo(() => dbService.getData().socialProfiles, []);
+  const data = dbService.getData();
+  const interests = dbService.getInterests();
+  const socialProfiles = data.socialProfiles;
 
   // Set initial zoom and focus if provided
   useEffect(() => {
@@ -43,7 +45,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         fgRef.current.zoom(2.5, 1000);
       }
     }
-  }, [focusNodeId, fgRef.current]);
+  }, [focusNodeId, fgRef.current, viewMode]);
 
   const handleSyncScholar = async () => {
     if (!socialProfiles.name) {
@@ -75,7 +77,57 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     const nodes: any[] = [];
     const links: any[] = [];
     
-    // Heuristic to extract "Datasets" from articles
+    // Topic Nodes and Links mode
+    if (viewMode === 'topics') {
+      // 1. Create nodes for all interests
+      interests.forEach(topic => {
+        const relatedArticles = articles.filter(a => a.tags.some(t => t.toLowerCase().includes(topic.toLowerCase())));
+        nodes.push({
+          id: topic,
+          name: topic,
+          type: 'topic',
+          val: 15 + relatedArticles.length,
+          color: '#f43f5e' // Rose-500 for topics
+        });
+      });
+
+      // 2. Create edges between topics if articles bridge them
+      const edgeWeights: Record<string, { count: number; articles: string[] }> = {};
+      
+      articles.forEach(article => {
+        const articleTopics = interests.filter(topic => 
+          article.tags.some(tag => tag.toLowerCase().includes(topic.toLowerCase()))
+        );
+
+        // Generate pairs of topics linked by this article
+        for (let i = 0; i < articleTopics.length; i++) {
+          for (let j = i + 1; j < articleTopics.length; j++) {
+            const pair = [articleTopics[i], articleTopics[j]].sort().join(' <-> ');
+            if (!edgeWeights[pair]) {
+              edgeWeights[pair] = { count: 0, articles: [] };
+            }
+            edgeWeights[pair].count += 1;
+            edgeWeights[pair].articles.push(article.title);
+          }
+        }
+      });
+
+      Object.entries(edgeWeights).forEach(([pair, info]) => {
+        const [source, target] = pair.split(' <-> ');
+        links.push({
+          source,
+          target,
+          type: 'bridging',
+          width: Math.min(info.count, 8),
+          name: `${info.count} shared papers`,
+          color: `rgba(244, 63, 94, ${Math.min(0.1 + info.count * 0.1, 0.7)})`
+        });
+      });
+
+      return { nodes, links };
+    }
+
+    // Unified / Articles / Notes / Datasets logic
     const uniqueDatasets = new Set<string>();
     articles.forEach(a => {
       if (a.dataLocation) uniqueDatasets.add(a.dataLocation);
@@ -202,7 +254,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
 
     return { nodes, links };
-  }, [articles, notes, books, viewMode, focusNodeId, authorNetworkData]);
+  }, [articles, notes, books, viewMode, focusNodeId, authorNetworkData, interests]);
 
   const handleMineCitations = async () => {
     if (isMining) return;
@@ -246,12 +298,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                 Clear Dataset Filter ✕
               </button>
            )}
-           <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex">
-             {(['notes', 'articles', 'unified', 'datasets', 'author'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
+           <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex overflow-x-auto max-w-sm md:max-w-none">
+             {(['notes', 'articles', 'topics', 'unified', 'datasets', 'author'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
                <button
                  key={mode}
                  onClick={() => setViewMode(mode)}
-                 className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                    viewMode === mode ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
                  }`}
                >
@@ -318,7 +370,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                if (viewMode === 'author') return 12 - (n.level * 3);
                return n.val || 10;
             }}
-            linkWidth={(l: any) => (l.type === 'citation' ? 2 : 1)}
+            linkWidth={(l: any) => l.width || (l.type === 'citation' ? 2 : 1)}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             linkColor={(l: any) => l.color || 'rgba(255,255,255,0.1)'}
@@ -378,6 +430,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                   <p className="text-[10px] text-slate-400">Level 1: Co-authors</p>
                   <p className="text-[10px] text-slate-400">Level 2: Deep Collaborators</p>
                </div>
+             </div>
+           ) : viewMode === 'topics' ? (
+             <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                   <span className="w-3 h-3 rounded-full bg-rose-500"></span>
+                   <span className="text-xs text-slate-300 font-medium">Research Interest</span>
+                </div>
+                <div className="flex items-center gap-3">
+                   <div className="w-6 h-[2px] bg-rose-500/40"></div>
+                   <span className="text-xs text-slate-300 font-medium">Shared Literature</span>
+                </div>
+                <p className="text-[9px] text-slate-500 italic mt-2">Thicker edges represent multi-disciplinary papers bridging two domains.</p>
              </div>
            ) : (
              <>
