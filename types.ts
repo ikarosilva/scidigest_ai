@@ -12,6 +12,14 @@ export enum FeedSourceType {
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
 
+export type SyncStatus = 'disconnected' | 'synced' | 'syncing' | 'error' | 'update-available';
+
+export type RecommendationBias = 'conservative' | 'balanced' | 'experimental';
+
+export interface AIConfig {
+  recommendationBias: RecommendationBias;
+}
+
 export interface UserReviews {
   sentiment: Sentiment;
   summary: string;
@@ -20,15 +28,30 @@ export interface UserReviews {
   citedByUrl?: string;
 }
 
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  articleIds: string[];
+  lastEdited: string;
+}
+
+export interface Feed {
+  id: string;
+  name: string;
+  url: string;
+  active: boolean;
+}
+
 export interface Article {
   id: string;
   title: string;
   authors: string[];
   abstract: string;
-  date: string; // Keep full date
-  year: string; // New field for prominent year display
+  date: string;
+  year: string;
   source: FeedSourceType;
-  rating: number; // 1-10
+  rating: number;
   pdfUrl?: string;
   sourceCode?: string;
   dataLocation?: string;
@@ -36,6 +59,8 @@ export interface Article {
   tags: string[];
   isBookmarked: boolean;
   notes: string;
+  noteIds: string[];
+  references?: string[]; // IDs or Titles of papers this paper cites
 }
 
 export interface Book {
@@ -49,6 +74,11 @@ export interface Book {
 export interface AppState {
   articles: Article[];
   books: Book[];
-  feedSources: string[];
-  userInterests: string[];
+  notes: Note[];
+  feedbackSubmissions: string[];
+  lastModified: string; // ISO Timestamp for sync
+  version: string;
+  aiConfig: AIConfig;
 }
+
+export type NetworkViewMode = 'notes' | 'articles' | 'unified';

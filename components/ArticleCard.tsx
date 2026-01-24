@@ -1,14 +1,17 @@
 
 import React, { useState } from 'react';
-import { Article, Sentiment } from '../types';
+import { Article, Sentiment, Note } from '../types';
 import { geminiService } from '../services/geminiService';
 
 interface ArticleCardProps {
   article: Article;
+  allNotes: Note[];
   onUpdate: (id: string, updates: Partial<Article>) => void;
+  onNavigateToNote: (noteId: string) => void;
+  onRead: () => void;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, onNavigateToNote, onRead }) => {
   const [summary, setSummary] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [researching, setResearching] = useState(false);
@@ -34,8 +37,10 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
     Unknown: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
   };
 
+  const linkedNotes = allNotes.filter(n => article.noteIds.includes(n.id));
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card">
       <div className="flex justify-between items-start mb-3">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -60,16 +65,36 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
               value={article.rating}
               onChange={(e) => onUpdate(article.id, { rating: parseInt(e.target.value) })}
               className="w-12 text-center bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 rounded text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none transition-all py-1"
-              title="Set your rating (1-10) to improve AI recommendations"
             />
             <span className="text-xs text-slate-500">/10</span>
           </div>
         </div>
       </div>
 
-      <h3 className="text-lg font-bold text-slate-100 leading-tight mb-1">{article.title}</h3>
+      <h3 
+        onClick={onRead}
+        className="text-lg font-bold text-slate-100 leading-tight mb-1 cursor-pointer hover:text-indigo-400 transition-colors"
+      >
+        {article.title}
+      </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
       
+      {/* Linked Notes Section */}
+      {linkedNotes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-4">
+          <span className="text-[9px] uppercase font-bold text-slate-500 tracking-widest block w-full mb-1">Linked Notes</span>
+          {linkedNotes.map(note => (
+            <button 
+              key={note.id}
+              onClick={() => onNavigateToNote(note.id)}
+              className="text-[10px] bg-indigo-500/10 hover:bg-indigo-500/30 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded transition-all flex items-center gap-1"
+            >
+              <span>✍️</span> {note.title}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Metrics Row */}
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-800/50">
         <div className="flex flex-col">
@@ -82,27 +107,8 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
           </div>
         </div>
         {article.userReviews.citedByUrl && (
-          <a 
-            href={article.userReviews.citedByUrl} 
-            target="_blank" 
-            rel="noreferrer"
-            className="text-[10px] text-indigo-500 hover:text-indigo-400 underline font-medium self-end mb-0.5"
-          >
+          <a href={article.userReviews.citedByUrl} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-400 underline font-medium self-end mb-0.5">
             Google Scholar →
-          </a>
-        )}
-      </div>
-
-      {/* Code & Data Links */}
-      <div className="flex gap-3 mb-4">
-        {article.sourceCode && (
-          <a href={article.sourceCode} target="_blank" rel="noreferrer" className="text-[11px] flex items-center gap-1 text-emerald-400 hover:underline">
-            <span>💻</span> Code Available
-          </a>
-        )}
-        {article.dataLocation && (
-          <a href={article.dataLocation} target="_blank" rel="noreferrer" className="text-[11px] flex items-center gap-1 text-sky-400 hover:underline">
-            <span>📊</span> Data Source
           </a>
         )}
       </div>
@@ -135,9 +141,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
             </button>
           </div>
           <p className="text-xs text-slate-300 italic">"{article.userReviews.summary}"</p>
-          {article.userReviews.lastUpdated && (
-            <p className="text-[9px] text-slate-600 mt-1">Last AI consensus: {article.userReviews.lastUpdated}</p>
-          )}
         </div>
       </div>
 
@@ -149,8 +152,11 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, onUpdate }) => {
         >
           {loading ? 'Thinking...' : '⚡ Summarize'}
         </button>
-        <button className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors">
-          📎 PDF
+        <button 
+          onClick={onRead}
+          className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-2"
+        >
+          <span className="text-xs">📖</span> Read
         </button>
       </div>
     </div>

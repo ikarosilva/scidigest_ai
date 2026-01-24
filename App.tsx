@@ -1,130 +1,276 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import ArticleCard from './components/ArticleCard';
 import FeedMonitor from './components/FeedMonitor';
 import InterestsManager from './components/InterestsManager';
 import TrendingSection from './components/TrendingSection';
-import { dbService } from './services/dbService';
+import NotesSection from './components/NotesSection';
+import SettingsSection from './components/SettingsSection';
+import NetworkGraph from './components/NetworkGraph';
+import Reader from './components/Reader';
+import FeedbackModal from './components/FeedbackModal';
+import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
-import { Article, Book, Sentiment } from './types';
+import { cloudSyncService } from './services/cloudSyncService';
+import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig } from './types';
 
 const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('feed');
   const [data, setData] = useState(dbService.getData());
   const [interests, setInterests] = useState(dbService.getInterests());
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const [apaCitations, setApaCitations] = useState<string | null>(null);
-  const [isGeneratingCitations, setIsGeneratingCitations] = useState(false);
+  const [feeds, setFeeds] = useState<Feed[]>(dbService.getFeeds());
+  const [aiConfig, setAIConfig] = useState<AIConfig>(dbService.getAIConfig());
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('disconnected');
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [showSyncKey, setShowSyncKey] = useState(false);
+  const [inputSyncKey, setInputSyncKey] = useState('');
+  const [isProcessingBooks, setIsProcessingBooks] = useState(false);
+  const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
+  const [showImportBooks, setShowImportBooks] = useState(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [filterSentiment, setFilterSentiment] = useState<Sentiment | 'All'>('All');
-  const [filterHasCode, setFilterHasCode] = useState(false);
-  const [filterHasData, setFilterHasData] = useState(false);
 
+  // Cloud Sync Integration
   useEffect(() => {
-    setData(dbService.getData());
-    setInterests(dbService.getInterests());
+    cloudSyncService.init((status) => {
+      setSyncStatus(status as SyncStatus);
+    });
   }, []);
 
-  const handleUpdateInterests = (newInterests: string[]) => {
-    setInterests(newInterests);
-    dbService.saveInterests(newInterests);
+  const performCloudSync = useCallback(async (localData: any) => {
+    if (syncStatus === 'disconnected' || syncStatus === 'error') return;
+    setSyncStatus('syncing');
+    
+    try {
+      const cloudFile = await cloudSyncService.findSyncFile();
+      if (cloudFile) {
+        const cloudData: any = await cloudSyncService.downloadData(cloudFile.id);
+        if (cloudData && cloudData.data) {
+          const cloudTime = new Date(cloudData.data.lastModified).getTime();
+          const localTime = new Date(localData.lastModified).getTime();
+
+          if (cloudTime > localTime) {
+            if (confirm("New research data found on another device. Update now?")) {
+              const { success } = dbService.importFullBackup(JSON.stringify(cloudData));
+              if (success) {
+                window.location.reload();
+                return;
+              }
+            }
+          }
+        }
+      }
+      
+      const currentInterests = dbService.getInterests();
+      const currentFeeds = dbService.getFeeds();
+      const currentAIConfig = dbService.getAIConfig();
+      const payload = { 
+        version: APP_VERSION, 
+        data: localData, 
+        interests: currentInterests, 
+        feeds: currentFeeds,
+        aiConfig: currentAIConfig,
+        timestamp: new Date().toISOString() 
+      };
+      const success = await cloudSyncService.uploadData(payload);
+      setSyncStatus(success ? 'synced' : 'error');
+    } catch (e) {
+      console.error("Sync Error", e);
+      setSyncStatus('error');
+    }
+  }, [syncStatus]);
+
+  useEffect(() => {
+    if (syncStatus === 'synced') {
+      const interval = setInterval(() => performCloudSync(data), 60000 * 5);
+      return () => clearInterval(interval);
+    }
+  }, [syncStatus, data, performCloudSync]);
+
+  const handleCloudSignIn = () => {
+    cloudSyncService.signIn((success) => {
+      if (success) {
+        setSyncStatus('synced');
+        performCloudSync(data);
+      }
+    });
+  };
+
+  const handleCloudSignOut = () => {
+    cloudSyncService.signOut();
+    setSyncStatus('disconnected');
+  };
+
+  const handleSaveSyncKey = () => {
+    if (inputSyncKey.length < 8) {
+      alert("Key must be at least 8 characters.");
+      return;
+    }
+    dbService.setSyncKey(inputSyncKey);
+    alert("Sync Key updated. Cloud data will now be encrypted with this key.");
+    setInputSyncKey('');
+    setShowSyncKey(false);
   };
 
   const handleUpdateArticle = (id: string, updates: Partial<Article>) => {
     const newData = dbService.updateArticle(id, updates);
     setData({ ...newData });
+    if (syncStatus === 'synced') performCloudSync(newData);
   };
 
   const handleAddArticle = (article: Article) => {
     const newData = dbService.addArticle(article);
     setData({ ...newData });
+    if (syncStatus === 'synced') performCloudSync(newData);
     alert('Article added to library!');
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpdateNote = (id: string, updates: Partial<Note>) => {
+    const newData = dbService.updateNote(id, updates);
+    setData({ ...newData });
+    if (syncStatus === 'synced') performCloudSync(newData);
+  };
+
+  const handleAddNote = (note: Note) => {
+    const newData = dbService.addNote(note);
+    setData({ ...newData });
+    if (syncStatus === 'synced') performCloudSync(newData);
+  };
+
+  const handleUpdateFeeds = (newFeeds: Feed[]) => {
+    setFeeds(newFeeds);
+    dbService.saveFeeds(newFeeds);
+    if (syncStatus === 'synced') performCloudSync(data);
+  };
+
+  const handleUpdateAIConfig = (newConfig: AIConfig) => {
+    setAIConfig(newConfig);
+    dbService.saveAIConfig(newConfig);
+    if (syncStatus === 'synced') performCloudSync(data);
+  };
+
+  const handleOpenReader = (article: Article) => {
+    setActiveReadingArticle(article);
+    setCurrentTab('reader');
+  };
+
+  const handleGoodReadsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setIsImporting(true);
+      setIsProcessingBooks(true);
       try {
         const text = await file.text();
         const json = JSON.parse(text);
-        
-        // Use Gemini to intelligently filter the book list based on user topics (interests)
         const filteredBooks = await geminiService.filterBooks(json, interests);
-        
         if (filteredBooks.length > 0) {
           const newData = dbService.addBooks(filteredBooks);
           setData({ ...newData });
-          alert(`Success! Ingested ${filteredBooks.length} relevant scientific books. Your recommendations will now prioritize these areas of interest.`);
+          alert(`Success! AI librarian ingested ${filteredBooks.length} relevant scientific books into your context.`);
+          setShowImportBooks(false);
         } else {
-          alert('No relevant scientific books found in the provided list based on your Research Topics.');
+          alert('No relevant scientific books found in that file.');
         }
       } catch (err) {
-        console.error(err);
-        alert('Failed to process file. Ensure it is a valid JSON GoodReads export.');
+        alert('Failed to process GoodReads file. Please ensure it is a valid JSON export.');
       }
-      setIsImporting(false);
+      setIsProcessingBooks(false);
     }
   };
 
-  const handleExportBibTeX = () => {
-    const bibtex = exportService.generateBibTeX(data.articles);
-    exportService.downloadFile(bibtex, 'scidigest_export.bib', 'text/plain');
-  };
-
-  const handleGenerateAPA = async () => {
-    setIsGeneratingCitations(true);
-    try {
-      const citations = await geminiService.generateAPACitations(data.articles);
-      setApaCitations(citations || "Error generating citations.");
-    } catch (e) {
-      setApaCitations("Failed to generate citations. Check API key.");
+  const handleManualImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const text = await file.text();
+      const { success } = dbService.importFullBackup(text);
+      if (success) {
+        alert("Database restored successfully.");
+        window.location.reload();
+      } else {
+        alert("Failed to restore. Invalid file format.");
+      }
     }
-    setIsGeneratingCitations(false);
   };
 
-  // Memoized Filtered Articles
   const filteredArticles = useMemo(() => {
     return data.articles.filter((article: Article) => {
-      const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            article.abstract.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            article.authors.some(a => a.toLowerCase().includes(searchQuery.toLowerCase()));
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = article.title.toLowerCase().includes(q) || 
+                            article.abstract.toLowerCase().includes(q) ||
+                            article.authors.some(a => a.toLowerCase().includes(q));
       const matchesSentiment = filterSentiment === 'All' || article.userReviews.sentiment === filterSentiment;
-      const matchesCode = !filterHasCode || !!article.sourceCode;
-      const matchesData = !filterHasData || !!article.dataLocation;
-      
-      return matchesSearch && matchesSentiment && matchesCode && matchesData;
+      return matchesSearch && matchesSentiment;
     });
-  }, [data.articles, searchQuery, filterSentiment, filterHasCode, filterHasData]);
+  }, [data.articles, searchQuery, filterSentiment]);
 
   return (
-    <div className="flex min-h-screen bg-slate-950 text-slate-100">
+    <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
       <Sidebar 
         currentTab={currentTab} 
         setTab={setCurrentTab} 
+        onOpenFeedback={() => setShowFeedback(true)}
+        syncStatus={syncStatus}
       />
       
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+
       <main className="flex-1 ml-64 p-8">
         <div className="max-w-6xl mx-auto">
-          {currentTab === 'dashboard' && <Dashboard articles={data.articles} onNavigate={setCurrentTab} />}
+          {currentTab === 'dashboard' && <Dashboard articles={data.articles} onNavigate={setCurrentTab} onRead={handleOpenReader} />}
           
           {currentTab === 'interests' && (
             <InterestsManager 
               interests={interests} 
-              onUpdateInterests={handleUpdateInterests} 
+              onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
             />
           )}
 
-          {currentTab === 'trending' && (
-            <TrendingSection 
-              interests={interests}
-              onAdd={handleAddArticle}
+          {currentTab === 'trending' && <TrendingSection interests={interests} onAdd={handleAddArticle} onRead={handleOpenReader} />}
+
+          {currentTab === 'reader' && (
+            <Reader 
+              article={activeReadingArticle} 
+              notes={data.notes}
+              onNavigateToLibrary={() => setCurrentTab('library')}
+              onUpdateNote={handleUpdateNote}
+              onCreateNote={handleAddNote}
+            />
+          )}
+
+          {currentTab === 'networks' && (
+            <NetworkGraph 
+              articles={data.articles} 
+              notes={data.notes} 
+              onUpdateArticle={handleUpdateArticle}
+              onNavigateToArticle={(aid) => {
+                const article = data.articles.find(a => a.id === aid);
+                if (article) handleOpenReader(article);
+              }}
+              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+            />
+          )}
+
+          {currentTab === 'notes' && (
+            <NotesSection 
+              notes={data.notes}
+              articles={data.articles}
+              activeNoteId={activeNoteId}
+              setActiveNoteId={setActiveNoteId}
+              onUpdate={handleUpdateNote}
+              onCreate={() => {
+                const nn = { id: Math.random().toString(36).substr(2, 9), title: 'New Note', content: '', articleIds: [], lastEdited: new Date().toISOString() };
+                setData(dbService.addNote(nn));
+              }}
+              onDelete={(id) => setData(dbService.deleteNote(id))}
+              onNavigateToArticle={(aid) => {
+                const article = data.articles.find(a => a.id === aid);
+                if (article) handleOpenReader(article);
+              }}
             />
           )}
 
@@ -133,246 +279,216 @@ const App: React.FC = () => {
               <header className="flex justify-between items-center">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-100">Your Library</h2>
-                  <p className="text-slate-400">Query and manage your research collection.</p>
+                  <p className="text-slate-400">Manage your research collection and books.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button 
-                    onClick={() => setIsExporting(true)}
+                    onClick={() => setShowImportBooks(!showImportBooks)}
+                    className={`px-5 py-2 rounded-xl text-sm font-medium transition-colors border ${showImportBooks ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
+                  >
+                    {showImportBooks ? 'Close Ingestion' : '📥 Import Books'}
+                  </button>
+                  <button 
+                    onClick={() => exportService.downloadFile(exportService.generateBibTeX(data.articles), 'scidigest_export.bib', 'text/plain')}
                     className="bg-indigo-500/10 text-indigo-400 px-5 py-2 rounded-xl text-sm font-medium hover:bg-indigo-500/20 transition-colors border border-indigo-500/20"
                   >
-                    📤 Export Library
-                  </button>
-                  <button className="bg-slate-100 text-slate-950 px-5 py-2 rounded-xl text-sm font-bold hover:bg-white transition-colors">
-                    + Manually Add
+                    📄 Export BibTeX
                   </button>
                 </div>
               </header>
 
-              {/* Advanced Filter Bar */}
-              <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[200px]">
-                  <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Search Query</label>
-                  <input 
-                    type="text" 
-                    placeholder="Search by title, author, or abstract..."
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Sentiment</label>
-                  <select 
-                    className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-indigo-500"
-                    value={filterSentiment}
-                    onChange={(e) => setFilterSentiment(e.target.value as Sentiment | 'All')}
-                  >
-                    <option value="All">All Reception</option>
-                    <option value="Positive">Positive</option>
-                    <option value="Neutral">Neutral</option>
-                    <option value="Negative">Negative</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-4 mb-2 h-9">
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500"
-                      checked={filterHasCode}
-                      onChange={(e) => setFilterHasCode(e.target.checked)}
-                    />
-                    <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">Has Code</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer group">
-                    <input 
-                      type="checkbox" 
-                      className="w-4 h-4 rounded bg-slate-950 border-slate-800 text-indigo-600 focus:ring-indigo-500"
-                      checked={filterHasData}
-                      onChange={(e) => setFilterHasData(e.target.checked)}
-                    />
-                    <span className="text-xs font-medium text-slate-400 group-hover:text-slate-200">Has Data</span>
-                  </label>
-                </div>
-                <button 
-                  onClick={() => { setSearchQuery(''); setFilterSentiment('All'); setFilterHasCode(false); setFilterHasData(false); }}
-                  className="text-xs text-slate-500 hover:text-slate-300 mb-2 underline underline-offset-4"
-                >
-                  Clear Filters
-                </button>
-              </div>
-
-              {isExporting && (
-                <div className="bg-indigo-950/80 border border-indigo-500/30 backdrop-blur-xl rounded-3xl p-8 text-white relative overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
-                  <button 
-                    onClick={() => { setIsExporting(false); setApaCitations(null); }}
-                    className="absolute top-4 right-4 text-indigo-300/60 hover:text-white"
-                  >
-                    ✕ Close
-                  </button>
-                  <div className="relative z-10">
-                    <h3 className="text-xl font-bold mb-2">Export Bibliography</h3>
-                    <p className="text-indigo-200 mb-6 text-sm max-w-xl">
-                      Download your collection in professional research formats or generate high-accuracy APA citations for your next paper.
-                    </p>
-                    
-                    <div className="flex flex-wrap gap-4">
-                      <button 
-                        onClick={handleExportBibTeX}
-                        className="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:bg-indigo-500 transition-all active:scale-95"
-                      >
-                        Download BibTeX (for Zotero)
-                      </button>
-                      <button 
-                        onClick={handleGenerateAPA}
-                        disabled={isGeneratingCitations}
-                        className="bg-slate-800 text-indigo-400 border border-indigo-500/30 px-6 py-3 rounded-2xl font-bold text-sm shadow-lg hover:bg-slate-700 transition-all active:scale-95 disabled:opacity-50"
-                      >
-                        {isGeneratingCitations ? 'Generating APA...' : 'Generate APA List'}
-                      </button>
+              {showImportBooks && (
+                <div className="bg-slate-900 border border-amber-500/20 rounded-3xl p-8 text-center space-y-6 animate-in slide-in-from-top-4 duration-300 shadow-xl shadow-amber-500/5">
+                  <h3 className="text-xl font-bold text-slate-100 flex items-center justify-center gap-2">
+                    <span>📚</span> AI Book Ingestion
+                  </h3>
+                  <p className="text-slate-400 max-w-md mx-auto">
+                    Upload your GoodReads list. The AI Librarian will filter for relevant scientific non-fiction matching your research topics.
+                  </p>
+                  
+                  {isProcessingBooks ? (
+                    <div className="py-12 flex flex-col items-center gap-4">
+                      <div className="w-10 h-10 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
+                      <p className="text-amber-400 font-bold animate-pulse uppercase tracking-widest text-xs">AI Librarian is Filtering...</p>
                     </div>
-
-                    {apaCitations && (
-                      <div className="mt-8 bg-black/40 backdrop-blur-md rounded-2xl p-6 border border-white/10">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-sm font-bold uppercase tracking-widest text-indigo-400">APA Bibliography</h4>
-                          <button 
-                            onClick={() => { navigator.clipboard.writeText(apaCitations); alert('Copied to clipboard!'); }}
-                            className="text-xs bg-indigo-500/20 hover:bg-indigo-500/40 text-indigo-300 px-3 py-1 rounded-full transition-colors"
-                          >
-                            Copy to Clipboard
-                          </button>
-                        </div>
-                        <pre className="text-sm font-sans whitespace-pre-wrap leading-relaxed text-slate-300 bg-black/40 p-4 rounded-xl max-h-64 overflow-y-auto border border-white/5">
-                          {apaCitations}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                  <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-indigo-500 rounded-full opacity-10 blur-3xl"></div>
+                  ) : (
+                    <>
+                      <input type="file" className="hidden" id="goodreads-upload-library" accept=".json" onChange={handleGoodReadsUpload} />
+                      <label htmlFor="goodreads-upload-library" className="cursor-pointer block border-2 border-dashed border-slate-800 rounded-2xl p-12 hover:bg-amber-500/5 hover:border-amber-500/30 transition-all group">
+                        <span className="text-4xl mb-4 block group-hover:scale-110 transition-transform">📘</span>
+                        <p className="text-lg font-semibold text-slate-300">Choose GoodReads JSON</p>
+                        <p className="text-sm text-slate-500 mt-2">Maximum file size: 10MB</p>
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredArticles.length > 0 ? filteredArticles.map((article: Article) => (
+                {filteredArticles.map((article: Article) => (
                   <ArticleCard 
                     key={article.id} 
                     article={article} 
+                    allNotes={data.notes}
                     onUpdate={handleUpdateArticle} 
+                    onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+                    onRead={() => handleOpenReader(article)}
                   />
-                )) : (
+                ))}
+                {filteredArticles.length === 0 && !showImportBooks && (
                   <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-3xl border border-dashed border-slate-800">
-                    <p className="text-slate-500 text-lg italic mb-2">Your library looks a bit quiet.</p>
-                    <button 
-                      onClick={() => setCurrentTab('feed')}
-                      className="text-indigo-400 font-bold hover:text-indigo-300 underline underline-offset-4"
-                    >
-                      Discover new articles in the Feed Monitor →
-                    </button>
+                    <p className="text-slate-500 italic">Your library is empty. Start by ingesting articles from "AI Recommends" or "Trending".</p>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {currentTab === 'feed' && (
-            <FeedMonitor 
-              ratedArticles={data.articles} 
-              books={data.books} 
-              onAdd={handleAddArticle} 
-            />
-          )}
+          {currentTab === 'feed' && <FeedMonitor ratedArticles={data.articles} books={data.books} onAdd={handleAddArticle} onRead={handleOpenReader} activeFeeds={feeds.filter(f => f.active)} aiConfig={aiConfig} />}
+          
+          {currentTab === 'settings' && <SettingsSection feeds={feeds} onUpdateFeeds={handleUpdateFeeds} aiConfig={aiConfig} onUpdateAIConfig={handleUpdateAIConfig} />}
 
-          {currentTab === 'import' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10 text-center space-y-6">
-              <div className="w-20 h-20 bg-indigo-500/10 text-indigo-400 rounded-full flex items-center justify-center mx-auto text-3xl">
-                {isImporting ? '⏳' : '📚'}
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-slate-100">
-                  {isImporting ? 'Ingesting Reading List...' : 'Import GoodReads List'}
-                </h2>
-                <p className="text-slate-400 mt-2 max-w-md mx-auto">
-                  {isImporting 
-                    ? 'Gemini is currently sorting through your library to find scientific matches. This takes a few seconds...'
-                    : 'Upload your scientific reading history from GoodReads to help Gemini understand your research foundation.'}
-                </p>
-              </div>
-              
-              {!isImporting && (
-                <div className="border-2 border-dashed border-slate-800 rounded-2xl p-12 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all cursor-pointer group">
-                  <input 
-                    type="file" 
-                    className="hidden" 
-                    id="goodreads-upload" 
-                    accept=".json"
-                    onChange={handleFileUpload} 
-                  />
-                  <label htmlFor="goodreads-upload" className="cursor-pointer">
-                    <p className="text-lg font-semibold text-slate-300 group-hover:text-indigo-400">
-                      Click to browse JSON file
-                    </p>
-                    <p className="text-sm text-slate-500 mt-1">Maximum file size: 5MB</p>
-                  </label>
+          {currentTab === 'portability' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <header className="flex justify-between items-end">
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-2"><span>💾</span> Data & Privacy</h2>
+                  <p className="text-slate-400 mt-1">Local-First portability and cloud synchronization.</p>
                 </div>
-              )}
-
-              {isImporting && (
-                <div className="flex flex-col items-center gap-4 py-12">
-                   <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-                   <p className="text-sm text-indigo-400 font-medium">Analyzing non-fiction relevance...</p>
+                <div className="bg-slate-900 border border-slate-800 px-4 py-1.5 rounded-full flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Version {APP_VERSION}</span>
                 </div>
-              )}
+              </header>
 
-              {data.books.length > 0 && !isImporting && (
-                <div className="mt-8 text-left max-w-lg mx-auto">
-                  <h4 className="font-bold text-slate-300 mb-2">Relevant Books Ingested ({data.books.length})</h4>
-                  <ul className="space-y-2">
-                    {data.books.slice(0, 10).map((book: Book) => (
-                      <li key={book.id} className="text-sm text-slate-400 flex justify-between p-2 bg-slate-800 rounded border border-slate-700">
-                        <span className="truncate pr-4">{book.title}</span>
-                        <span className="font-bold text-indigo-400 shrink-0">Rating: {book.rating}</span>
-                      </li>
-                    ))}
-                    {data.books.length > 10 && (
-                      <li className="text-[10px] text-slate-600 text-center">+ {data.books.length - 10} more relevant works</li>
+              {/* Security Credentials Section */}
+              <div className="bg-emerald-600/10 border border-emerald-500/20 rounded-3xl p-8">
+                 <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-emerald-300">Security Credentials</h3>
+                      <p className="text-sm text-emerald-400/80 mt-1 max-w-md">
+                        This key encrypts your data before it leaves your browser. Keep it secret.
+                      </p>
+                    </div>
+                    <span className="text-4xl">🔐</span>
+                 </div>
+
+                 <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => setShowSyncKey(!showSyncKey)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-6 rounded-2xl transition-all flex items-center gap-2"
+                      >
+                        {showSyncKey ? '🙈 Hide Sync Key' : '👁️ Reveal Sync Key'}
+                      </button>
+                    </div>
+                    
+                    {showSyncKey && (
+                      <div className="bg-slate-950 p-4 rounded-xl border border-emerald-500/20 break-all font-mono text-xs text-emerald-300">
+                        {dbService.getSyncKey()}
+                      </div>
                     )}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
 
-          {currentTab === 'settings' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-10">
-              <h2 className="text-2xl font-bold text-slate-100 mb-6">Settings</h2>
-              <div className="space-y-6">
-                <section>
-                  <h3 className="font-semibold text-slate-300 mb-3">Feed Sources</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {['HuggingFace', 'arXiv', 'Nature', 'Medium', 'Google Scholar', 'TF Blog'].map(src => (
-                      <label key={src} className="flex items-center gap-3 p-3 border border-slate-800 rounded-xl hover:bg-slate-800/50 cursor-pointer group">
-                        <input type="checkbox" defaultChecked className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500" />
-                        <span className="text-sm font-medium text-slate-400 group-hover:text-slate-200">{src}</span>
-                      </label>
-                    ))}
-                  </div>
-                </section>
-                <section>
-                  <h3 className="font-semibold text-slate-300 mb-3">AI Configuration</h3>
-                  <div className="bg-slate-950/50 p-4 rounded-xl space-y-4 border border-slate-800">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-400">Model Precision</span>
-                      <select className="bg-slate-900 border border-slate-700 text-slate-200 rounded px-3 py-1 text-sm outline-none focus:ring-1 focus:ring-indigo-500">
-                        <option>Gemini 3 Flash (Fast)</option>
-                        <option>Gemini 3 Pro (Deep)</option>
-                      </select>
+                    <div className="mt-4 pt-4 border-t border-emerald-500/10">
+                      <label className="text-[10px] uppercase font-bold text-emerald-500/60 mb-2 block tracking-widest">Update Key (Relink Device)</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="password"
+                          value={inputSyncKey}
+                          onChange={(e) => setInputSyncKey(e.target.value)}
+                          placeholder="Paste existing Sync Key..."
+                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
+                        />
+                        <button 
+                          onClick={handleSaveSyncKey}
+                          className="bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold px-6 py-2 rounded-xl border border-emerald-500/20 transition-all"
+                        >
+                          Save
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-slate-400">RLHF Feedback Loop</span>
-                      <button className="text-xs bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-2 py-1 rounded">Active</button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Cloud Sync Section */}
+                <div className="bg-indigo-600/10 border border-indigo-500/20 rounded-3xl p-8 flex flex-col">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-indigo-300">Cloud Relay</h3>
+                      <p className="text-sm text-indigo-400/80 mt-1">
+                        Automated synchronization across all Chrome devices via Google Drive.
+                      </p>
                     </div>
+                    <span className="text-4xl">☁️</span>
                   </div>
-                </section>
+                  
+                  <div className="mt-auto space-y-4">
+                    {syncStatus === 'disconnected' ? (
+                      <button 
+                        onClick={handleCloudSignIn}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20"
+                      >
+                        Sign In with Google
+                      </button>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={() => performCloudSync(data)}
+                          className={`w-full font-bold py-4 rounded-2xl transition-all ${
+                            syncStatus === 'syncing' ? 'bg-slate-800 text-slate-400' : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-600/20'
+                          }`}
+                          disabled={syncStatus === 'syncing'}
+                        >
+                          {syncStatus === 'syncing' ? '🔄 Syncing...' : '🔄 Sync Now (Manual)'}
+                        </button>
+                        <button 
+                          onClick={handleCloudSignOut}
+                          className="w-full border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 font-bold py-4 rounded-2xl transition-all"
+                        >
+                          Sign Out
+                        </button>
+                      </>
+                    )}
+                    <p className="text-[10px] text-indigo-400/60 uppercase tracking-widest font-bold text-center">
+                      Last Attempt: {new Date(data.lastModified).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Manual Management Section */}
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 flex flex-col">
+                  <div className="flex justify-between items-start mb-6">
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-200">Local Management</h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Hard-copy backups and researcher-specific export formats.
+                      </p>
+                    </div>
+                    <span className="text-4xl">📂</span>
+                  </div>
+                  
+                  <div className="mt-auto space-y-4">
+                    <button 
+                      onClick={() => exportService.downloadFile(dbService.exportFullBackup(), `scidigest_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json')} 
+                      className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-4 rounded-2xl transition-all"
+                    >
+                      💾 Download JSON Backup
+                    </button>
+                    
+                    <input type="file" accept=".json" onChange={handleManualImport} className="hidden" id="manual-restore" />
+                    <label htmlFor="manual-restore" className="w-full border-2 border-slate-800 hover:bg-slate-800 text-slate-400 font-bold py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center">
+                      📥 Restore from JSON File
+                    </label>
+
+                    <button 
+                      onClick={() => exportService.downloadFile(exportService.generateBibTeX(data.articles), 'scidigest_export.bib', 'text/plain')}
+                      className="w-full border border-slate-800 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30 font-bold py-4 rounded-2xl transition-all"
+                    >
+                      📄 Export as BibTeX (.bib)
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

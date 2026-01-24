@@ -6,9 +6,10 @@ import { Article } from '../types';
 interface DashboardProps {
   articles: Article[];
   onNavigate: (tab: string) => void;
+  onRead: (article: Article) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) => {
   // Process data for charts
   const tagCounts: Record<string, number> = {};
   articles.forEach(a => {
@@ -125,7 +126,11 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate }) => {
         </div>
         <div className="space-y-3">
           {articles.filter(a => a.rating >= 9).slice(0, 2).map(a => (
-            <div key={a.id} className="bg-slate-900/50 p-3 rounded-xl border border-slate-800 flex justify-between items-center">
+            <div 
+              key={a.id} 
+              onClick={() => onRead(a)}
+              className="bg-slate-900/50 p-3 rounded-xl border border-slate-800 flex justify-between items-center cursor-pointer hover:bg-slate-800 transition-colors"
+            >
               <div>
                 <p className="text-sm font-bold text-slate-200">{a.title}</p>
                 <p className="text-xs text-slate-500">{a.authors[0]} • {a.source}</p>

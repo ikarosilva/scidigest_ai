@@ -6,9 +6,10 @@ import { FeedSourceType, Article } from '../types';
 interface TrendingSectionProps {
   interests: string[];
   onAdd: (article: Article) => void;
+  onRead: (article: Article) => void;
 }
 
-const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd }) => {
+const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onRead }) => {
   const [timeScale, setTimeScale] = useState('6 months');
   const [selectedTopics, setSelectedTopics] = useState<string[]>(interests.slice(0, 3));
   const [trending, setTrending] = useState<any[]>([]);
@@ -107,7 +108,24 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd }) =
                 </div>
               </div>
 
-              <h3 className="text-xl font-bold text-slate-100 mb-2 leading-snug group-hover:text-indigo-400 transition-colors">
+              <h3 
+                onClick={() => onRead({
+                  id: Math.random().toString(),
+                  title: paper.title,
+                  authors: paper.authors,
+                  abstract: paper.snippet,
+                  date: `${paper.year}-01-01`,
+                  year: paper.year,
+                  source: (paper.source as any) || FeedSourceType.MANUAL,
+                  rating: 5,
+                  tags: ['Trending'],
+                  isBookmarked: false,
+                  notes: '',
+                  noteIds: [],
+                  userReviews: { sentiment: 'Unknown', summary: '' }
+                })}
+                className="text-xl font-bold text-slate-100 mb-2 leading-snug group-hover:text-indigo-400 transition-colors cursor-pointer"
+              >
                 {paper.title}
               </h3>
               <p className="text-xs text-slate-500 mb-4">{paper.authors.join(', ')}</p>
@@ -146,7 +164,8 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd }) =
                       summary: 'Highly trending topic in community.',
                       citationCount: paper.citationCount,
                       citedByUrl: paper.scholarUrl
-                    }
+                    },
+                    noteIds: []
                   })}
                   className="bg-slate-800 hover:bg-indigo-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all"
                 >

@@ -1,18 +1,36 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Article, Book, UserReviews, Sentiment, FeedSourceType } from "../types";
+import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always initialize GoogleGenAI with a named parameter using process.env.API_KEY directly
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const geminiService = {
   /**
-   * Recommends articles based on user's past ratings
+   * Recommends articles based on user's past ratings and AI config
    */
-  async recommendArticles(ratedArticles: Article[], books: Book[], candidates: any[]) {
+  async recommendArticles(ratedArticles: Article[], books: Book[], candidates: any[], aiConfig: AIConfig) {
     const ai = getAI();
+    
+    let biasInstruction = "";
+    switch(aiConfig.recommendationBias) {
+      case 'conservative':
+        biasInstruction = "Strictly prioritize candidates that are very similar in topic and style to the user's highest rated articles. Avoid novel or experimental topics.";
+        break;
+      case 'experimental':
+        biasInstruction = "Look for novel, breakthrough, or diverse topics that the user hasn't explored much yet, but that intersect with their general research interests. Favor high-uncertainty but high-potential-interest candidates ('Exploratory' mode).";
+        break;
+      case 'balanced':
+      default:
+        biasInstruction = "Balance similarity to past high-rated content with occasional novel topics that expand the user's horizons slightly.";
+        break;
+    }
+
     const prompt = `
       As a world-class research assistant, your task is to rank the following candidate papers based on the user's historical preferences.
       
+      Recommendation Bias: ${biasInstruction}
+
       User's High-Rated Articles (10/10):
       ${ratedArticles.filter(a => a.rating >= 8).map(a => `- ${a.title} (${a.tags.join(', ')})`).join('\n')}
       
@@ -37,10 +55,37 @@ export const geminiService = {
           }
         }
       });
+      // Correct: Use .text property directly
       return JSON.parse(response.text || '[]');
     } catch (error) {
       console.error("Gemini Recommendation Error:", error);
       return candidates.map((_, i) => i);
+    }
+  },
+
+  async discoverReferences(article: Article): Promise<string[]> {
+    const ai = getAI();
+    const prompt = `Identify the top 5 most important papers or works cited by the article: "${article.title}" by ${article.authors.join(', ')}.
+    Search for the bibliography or reference list of this specific paper.
+    Return a JSON array of strings, where each string is a "Title, Year" of a cited paper.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    } catch (error) {
+      console.error("Discover References Error:", error);
+      return [];
     }
   },
 
@@ -50,6 +95,7 @@ export const geminiService = {
       model: 'gemini-3-flash-preview',
       contents: `Summarize this scientific article in 3 bullet points for a senior researcher: \nTitle: ${title}\nAbstract: ${abstract}`,
     });
+    // Correct: Use .text property directly
     return response.text;
   },
 
@@ -86,6 +132,7 @@ export const geminiService = {
         }
       });
 
+      // Extract text content and handle potential grounding metadata in UI if needed
       const result = JSON.parse(response.text || '{}');
       return {
         sentiment: result.sentiment as Sentiment || 'Unknown',
@@ -139,6 +186,7 @@ export const geminiService = {
           }
         }
       });
+      // Correct: Use .text property directly
       return JSON.parse(response.text || '[]');
     } catch (error) {
       console.error("Trending Research Error:", error);
@@ -188,6 +236,7 @@ export const geminiService = {
         }
       });
 
+      // Correct: Use .text property directly
       const filtered = JSON.parse(response.text || '[]');
       return filtered.map((b: any) => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -209,6 +258,7 @@ export const geminiService = {
       model: 'gemini-3-flash-preview',
       contents: `Format the following research papers as a perfect APA-style bibliography list. Do not add any extra text, just the citations: \n${list}`,
     });
+    // Correct: Use .text property directly
     return response.text;
   }
 };
