@@ -1,0 +1,5 @@
+{
+  "name": "SciDigest AI",
+  "description": "A professional research assistant designed to monitor scientific feeds, manage article libraries, and provide AI-driven insights based on publication impact and community sentiment.",
+  "requestFramePermissions": []
+}
