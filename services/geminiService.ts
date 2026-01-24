@@ -55,7 +55,6 @@ export const geminiService = {
           }
         }
       });
-      // Correct: Use .text property directly
       return JSON.parse(response.text || '[]');
     } catch (error) {
       console.error("Gemini Recommendation Error:", error);
@@ -65,14 +64,25 @@ export const geminiService = {
 
   async discoverInterestsFromProfiles(profiles: SocialProfiles): Promise<string[]> {
     const ai = getAI();
-    const prompt = `Analyze the following public researcher profiles to identify their primary research interests, technical expertise, and academic focus areas.
-    Profiles provided:
-    ${profiles.medium ? `- Medium: ${profiles.medium}` : ''}
-    ${profiles.linkedin ? `- LinkedIn: ${profiles.linkedin}` : ''}
-    ${profiles.googleScholar ? `- Google Scholar: ${profiles.googleScholar}` : ''}
     
-    Research these URLs using Google Search to find recent publications, articles, and professional descriptions.
-    Return a JSON array of strings, where each string is a specific research topic (e.g., "Reinforcement Learning", "Biosignal Processing"). Limit to the top 10 most relevant topics.`;
+    const profileContext = [
+      profiles.name ? `- Full Name: ${profiles.name}` : '',
+      profiles.medium ? `- Medium: ${profiles.medium}` : '',
+      profiles.linkedin ? `- LinkedIn: ${profiles.linkedin}` : '',
+      profiles.googleScholar ? `- Google Scholar: ${profiles.googleScholar}` : '',
+      profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Search the broad web for academic work by this name)' : ''
+    ].filter(Boolean).join('\n');
+
+    const prompt = `You are a researcher's assistant. Discover primary research interests, academic focus, and technical expertise based on provided context.
+    
+    User context:
+    ${profileContext}
+    
+    INSTRUCTIONS:
+    1. If "User Public Web Search" is enabled and a name is provided, perform a broad search for "${profiles.name} publications", "${profiles.name} research", and search Google Scholar / ResearchGate.
+    2. Analyze provided URLs for academic or technical themes. If a URL is restricted, extract the likely person from the path and search for their work.
+    3. Return a JSON array of specific research topics (e.g. "Biosignal Processing", "Bayesian Inference").
+    4. Focus on discovering NEW topics. Limit results to top 15 most relevant strings.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -126,7 +136,6 @@ export const geminiService = {
       model: 'gemini-3-flash-preview',
       contents: `Summarize this scientific article in 3 bullet points for a senior researcher: \nTitle: ${title}\nAbstract: ${abstract}`,
     });
-    // Correct: Use .text property directly
     return response.text;
   },
 
@@ -163,7 +172,6 @@ export const geminiService = {
         }
       });
 
-      // Extract text content and handle potential grounding metadata in UI if needed
       const result = JSON.parse(response.text || '{}');
       return {
         sentiment: result.sentiment as Sentiment || 'Unknown',
@@ -217,7 +225,6 @@ export const geminiService = {
           }
         }
       });
-      // Correct: Use .text property directly
       return JSON.parse(response.text || '[]');
     } catch (error) {
       console.error("Trending Research Error:", error);
@@ -267,7 +274,6 @@ export const geminiService = {
         }
       });
 
-      // Correct: Use .text property directly
       const filtered = JSON.parse(response.text || '[]');
       return filtered.map((b: any) => ({
         id: Math.random().toString(36).substr(2, 9),
@@ -289,7 +295,6 @@ export const geminiService = {
       model: 'gemini-3-flash-preview',
       contents: `Format the following research papers as a perfect APA-style bibliography list. Do not add any extra text, just the citations: \n${list}`,
     });
-    // Correct: Use .text property directly
     return response.text;
   }
 };

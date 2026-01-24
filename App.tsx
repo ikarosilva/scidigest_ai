@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import ArticleCard from './components/ArticleCard';
 import BookCard from './components/BookCard';
 import FeedMonitor from './components/FeedMonitor';
+import FeedsSection from './components/FeedsSection';
 import QueueSection from './components/QueueSection';
 import TrendingSection from './components/TrendingSection';
 import NotesSection from './components/NotesSection';
@@ -459,10 +460,15 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {currentTab === 'feeds' && (
+            <FeedsSection 
+              feeds={feeds} 
+              onUpdateFeeds={handleUpdateFeeds}
+            />
+          )}
+
           {currentTab === 'settings' && (
             <SettingsSection 
-              feeds={feeds} 
-              onUpdateFeeds={handleUpdateFeeds} 
               aiConfig={aiConfig} 
               onUpdateAIConfig={handleUpdateAIConfig} 
               interests={interests}

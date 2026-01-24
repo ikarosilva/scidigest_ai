@@ -33,20 +33,32 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
   };
 
   const handleDiscoverInterests = async () => {
-    if (!socialProfiles.medium && !socialProfiles.linkedin && !socialProfiles.googleScholar) {
-      alert("Please provide at least one public profile URL to discover interests.");
+    if (!socialProfiles.medium && !socialProfiles.linkedin && !socialProfiles.googleScholar && !socialProfiles.usePublicWebSearch) {
+      alert("Please provide at least one profile URL or enable 'User Public Web Search' to discover interests.");
       return;
     }
+
+    if (socialProfiles.usePublicWebSearch && !socialProfiles.name) {
+      alert("Please provide your full name for the Public Web Search.");
+      return;
+    }
+
     setIsDiscovering(true);
     try {
       const suggestedInterests = await geminiService.discoverInterestsFromProfiles(socialProfiles);
-      if (suggestedInterests.length > 0) {
-        // Merge with existing unique interests
-        const merged = Array.from(new Set([...interests, ...suggestedInterests]));
+      
+      // Filter out interests already in the list and limit to top 10 new ones
+      const existingInterestsLower = interests.map(i => i.toLowerCase());
+      const newTopics = suggestedInterests
+        .filter(t => !existingInterestsLower.includes(t.toLowerCase()))
+        .slice(0, 10);
+
+      if (newTopics.length > 0) {
+        const merged = [...interests, ...newTopics];
         onUpdateInterests(merged);
-        alert(`Discovered ${suggestedInterests.length} new topics based on your profiles!`);
+        alert(`Discovered ${newTopics.length} new topics! (Capped at top 10 unique results)`);
       } else {
-        alert("Gemini couldn't find specific research topics from these profiles. Ensure the URLs are public and contain academic/technical content.");
+        alert("Gemini couldn't find any NEW specific research topics. It might be finding topics you already have listed.");
       }
     } catch (err) {
       console.error(err);
@@ -55,7 +67,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
     setIsDiscovering(false);
   };
 
-  const updateProfileField = (field: keyof SocialProfiles, value: string) => {
+  const updateProfileField = (field: keyof SocialProfiles, value: any) => {
     onUpdateSocialProfiles({ ...socialProfiles, [field]: value });
   };
 
@@ -117,6 +129,16 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
           
           <div className="space-y-3">
             <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">👤</span>
+              <input 
+                type="text" 
+                placeholder="Full Researcher Name"
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                value={socialProfiles.name || ''}
+                onChange={(e) => updateProfileField('name', e.target.value)}
+              />
+            </div>
+            <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">✍️</span>
               <input 
                 type="url" 
@@ -146,6 +168,19 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
                 onChange={(e) => updateProfileField('googleScholar', e.target.value)}
               />
             </div>
+
+            <label className="flex items-center gap-3 p-3 bg-slate-900/80 rounded-xl border border-slate-800 cursor-pointer hover:bg-slate-800 transition-all">
+              <input 
+                type="checkbox"
+                checked={!!socialProfiles.usePublicWebSearch}
+                onChange={(e) => updateProfileField('usePublicWebSearch', e.target.checked)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500"
+              />
+              <div className="flex flex-col">
+                <span className="text-xs font-bold text-slate-200">User Public Web Search</span>
+                <span className="text-[10px] text-slate-500">Enable broad web discovery (Scholar, ResearchGate)</span>
+              </div>
+            </label>
           </div>
 
           <button 

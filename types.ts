@@ -44,9 +44,11 @@ export interface Feed {
 }
 
 export interface SocialProfiles {
+  name?: string;
   medium?: string;
   linkedin?: string;
   googleScholar?: string;
+  usePublicWebSearch?: boolean;
 }
 
 export interface Article {
