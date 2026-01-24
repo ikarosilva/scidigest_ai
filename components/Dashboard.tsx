@@ -12,27 +12,27 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) => {
   // Process data for charts
   const tagCounts: Record<string, number> = {};
-  articles.forEach(a => {
-    a.tags.forEach(t => {
+  articles.forEach((a: Article) => {
+    a.tags.forEach((t: string) => {
       tagCounts[t] = (tagCounts[t] || 0) + 1;
     });
   });
 
   const pieData = Object.entries(tagCounts)
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, value]: [string, number]) => ({ name, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
-  const ratingDistribution = Array.from({ length: 10 }, (_, i) => ({
+  const ratingDistribution = Array.from({ length: 10 }, (_, i: number) => ({
     rating: i + 1,
-    count: articles.filter(a => a.rating === i + 1).length
+    count: articles.filter((a: Article) => a.rating === i + 1).length
   }));
 
   const COLORS = ['#818cf8', '#a78bfa', '#f472b6', '#fb7185', '#fb923c'];
 
   const calculateAverageRating = () => {
     if (!articles || articles.length === 0) return '0.0';
-    const totalRating = articles.reduce((acc, a) => acc + a.rating, 0);
+    const totalRating = articles.reduce((acc: number, a: Article) => acc + a.rating, 0);
     const average = totalRating / articles.length;
     return average.toFixed(1);
   };
@@ -89,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
                 dataKey="value"
                 stroke="#1e293b"
               >
-                {pieData.map((entry, index) => (
+                {pieData.map((_, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
@@ -125,7 +125,7 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
           <button onClick={() => onNavigate('feed')} className="text-xs text-indigo-300 hover:underline">View All New Articles</button>
         </div>
         <div className="space-y-3">
-          {articles.filter(a => a.rating >= 9).slice(0, 2).map(a => (
+          {articles.filter((a: Article) => a.rating >= 9).slice(0, 2).map((a: Article) => (
             <div 
               key={a.id} 
               onClick={() => onRead(a)}
@@ -138,7 +138,7 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, onNavigate, onRead }) =
               <span className="text-xs font-bold text-indigo-400 bg-indigo-400/10 px-2 py-1 rounded">Ranked High</span>
             </div>
           ))}
-          {articles.filter(a => a.rating >= 9).length === 0 && (
+          {articles.filter((a: Article) => a.rating >= 9).length === 0 && (
             <p className="text-sm text-slate-500 italic">No high-rated articles found to base recommendations on. Rate more articles in your Library!</p>
           )}
         </div>

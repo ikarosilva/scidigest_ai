@@ -1,5 +1,5 @@
 
-import { Article, Book, Note, FeedSourceType, Feed, AIConfig } from '../types';
+import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
 const INTERESTS_KEY = 'scidigest_interests_v1';
@@ -56,7 +56,7 @@ const INITIAL_ARTICLES: Article[] = [
 ];
 
 export const dbService = {
-  getSyncKey: () => {
+  getSyncKey: (): string => {
     let key = localStorage.getItem(SYNC_KEY_STORAGE);
     if (!key) {
       key = Array.from(window.crypto.getRandomValues(new Uint8Array(16)))
@@ -75,7 +75,7 @@ export const dbService = {
   saveAIConfig: (config: AIConfig) => {
     localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
   },
-  getData: () => {
+  getData: (): AppState => {
     const data = localStorage.getItem(STORAGE_KEY);
     if (!data) return { 
       articles: INITIAL_ARTICLES, 
@@ -86,12 +86,12 @@ export const dbService = {
       version: APP_VERSION,
       aiConfig: DEFAULT_AI_CONFIG
     };
-    const parsed = JSON.parse(data);
+    const parsed = JSON.parse(data) as AppState;
     parsed.lastModified = parsed.lastModified || new Date().toISOString();
     parsed.aiConfig = parsed.aiConfig || DEFAULT_AI_CONFIG;
     return parsed;
   },
-  saveData: (data: any) => {
+  saveData: (data: AppState) => {
     data.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   },
@@ -107,7 +107,7 @@ export const dbService = {
     data.feedbackSubmissions.push(new Date().toISOString());
     dbService.saveData(data);
   },
-  getMonthlyFeedbackCount: () => {
+  getMonthlyFeedbackCount: (): number => {
     const data = dbService.getData();
     const now = new Date();
     const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
@@ -120,41 +120,41 @@ export const dbService = {
   saveInterests: (interests: string[]) => {
     localStorage.setItem(INTERESTS_KEY, JSON.stringify(interests));
   },
-  addArticle: (article: Article) => {
+  addArticle: (article: Article): AppState => {
     const data = dbService.getData();
     data.articles.unshift(article);
     dbService.saveData(data);
     return data;
   },
-  updateArticle: (id: string, updates: Partial<Article>) => {
+  updateArticle: (id: string, updates: Partial<Article>): AppState => {
     const data = dbService.getData();
     data.articles = data.articles.map((a: Article) => a.id === id ? { ...a, ...updates } : a);
     dbService.saveData(data);
     return data;
   },
-  addNote: (note: Note) => {
+  addNote: (note: Note): AppState => {
     const data = dbService.getData();
     data.notes.unshift(note);
     dbService.saveData(data);
     return data;
   },
-  updateNote: (id: string, updates: Partial<Note>) => {
+  updateNote: (id: string, updates: Partial<Note>): AppState => {
     const data = dbService.getData();
     data.notes = data.notes.map((n: Note) => n.id === id ? { ...n, ...updates } : n);
     dbService.saveData(data);
     return data;
   },
-  deleteNote: (id: string) => {
+  deleteNote: (id: string): AppState => {
     const data = dbService.getData();
     data.notes = data.notes.filter((n: Note) => n.id !== id);
     data.articles = data.articles.map((a: Article) => ({
       ...a,
-      noteIds: a.noteIds.filter(nid => nid !== id)
+      noteIds: a.noteIds.filter((nid: string) => nid !== id)
     }));
     dbService.saveData(data);
     return data;
   },
-  linkNoteToArticle: (noteId: string, articleId: string) => {
+  linkNoteToArticle: (noteId: string, articleId: string): AppState => {
     const data = dbService.getData();
     const note = data.notes.find((n: Note) => n.id === noteId);
     const article = data.articles.find((a: Article) => a.id === articleId);
@@ -163,7 +163,7 @@ export const dbService = {
     dbService.saveData(data);
     return data;
   },
-  unlinkNoteFromArticle: (noteId: string, articleId: string) => {
+  unlinkNoteFromArticle: (noteId: string, articleId: string): AppState => {
     const data = dbService.getData();
     const note = data.notes.find((n: Note) => n.id === noteId);
     const article = data.articles.find((a: Article) => a.id === articleId);
@@ -172,13 +172,13 @@ export const dbService = {
     dbService.saveData(data);
     return data;
   },
-  addBooks: (newBooks: Book[]) => {
+  addBooks: (newBooks: Book[]): AppState => {
     const data = dbService.getData();
     data.books = [...newBooks, ...data.books];
     dbService.saveData(data);
     return data;
   },
-  exportFullBackup: () => {
+  exportFullBackup: (): string => {
     const data = dbService.getData();
     const interests = dbService.getInterests();
     const feeds = dbService.getFeeds();
@@ -195,7 +195,6 @@ export const dbService = {
   importFullBackup: (jsonString: string): { success: boolean; upgraded: boolean } => {
     try {
       const parsed = JSON.parse(jsonString);
-      let dataToImport = parsed;
       let upgraded = false;
       const importedVersion = parsed.version || '1.0.0';
       if (importedVersion !== APP_VERSION) {
@@ -203,11 +202,11 @@ export const dbService = {
           upgraded = true;
         }
       }
-      if (dataToImport.data && dataToImport.interests) {
-        dbService.saveData(dataToImport.data);
-        dbService.saveInterests(dataToImport.interests);
-        if (dataToImport.feeds) dbService.saveFeeds(dataToImport.feeds);
-        if (dataToImport.aiConfig) dbService.saveAIConfig(dataToImport.aiConfig);
+      if (parsed.data && parsed.interests) {
+        dbService.saveData(parsed.data);
+        dbService.saveInterests(parsed.interests);
+        if (parsed.feeds) dbService.saveFeeds(parsed.feeds);
+        if (parsed.aiConfig) dbService.saveAIConfig(parsed.aiConfig);
         return { success: true, upgraded };
       }
       return { success: false, upgraded: false };

@@ -15,12 +15,12 @@ import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
 import { cloudSyncService } from './services/cloudSyncService';
-import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig } from './types';
+import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState } from './types';
 
 const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('feed');
-  const [data, setData] = useState(dbService.getData());
-  const [interests, setInterests] = useState(dbService.getInterests());
+  const [data, setData] = useState<AppState>(dbService.getData());
+  const [interests, setInterests] = useState<string[]>(dbService.getInterests());
   const [feeds, setFeeds] = useState<Feed[]>(dbService.getFeeds());
   const [aiConfig, setAIConfig] = useState<AIConfig>(dbService.getAIConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('disconnected');
@@ -38,12 +38,12 @@ const App: React.FC = () => {
 
   // Cloud Sync Integration
   useEffect(() => {
-    cloudSyncService.init((status) => {
+    cloudSyncService.init((status: string) => {
       setSyncStatus(status as SyncStatus);
     });
   }, []);
 
-  const performCloudSync = useCallback(async (localData: any) => {
+  const performCloudSync = useCallback(async (localData: AppState) => {
     if (syncStatus === 'disconnected' || syncStatus === 'error') return;
     setSyncStatus('syncing');
     
@@ -94,7 +94,7 @@ const App: React.FC = () => {
   }, [syncStatus, data, performCloudSync]);
 
   const handleCloudSignIn = () => {
-    cloudSyncService.signIn((success) => {
+    cloudSyncService.signIn((success: boolean) => {
       if (success) {
         setSyncStatus('synced');
         performCloudSync(data);
@@ -226,7 +226,7 @@ const App: React.FC = () => {
           {currentTab === 'interests' && (
             <InterestsManager 
               interests={interests} 
-              onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
+              onUpdateInterests={(ni: string[]) => { setInterests(ni); dbService.saveInterests(ni); }} 
             />
           )}
 
@@ -247,11 +247,11 @@ const App: React.FC = () => {
               articles={data.articles} 
               notes={data.notes} 
               onUpdateArticle={handleUpdateArticle}
-              onNavigateToArticle={(aid) => {
-                const article = data.articles.find(a => a.id === aid);
+              onNavigateToArticle={(aid: string) => {
+                const article = data.articles.find((a: Article) => a.id === aid);
                 if (article) handleOpenReader(article);
               }}
-              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+              onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
             />
           )}
 
@@ -266,9 +266,9 @@ const App: React.FC = () => {
                 const nn = { id: Math.random().toString(36).substr(2, 9), title: 'New Note', content: '', articleIds: [], lastEdited: new Date().toISOString() };
                 setData(dbService.addNote(nn));
               }}
-              onDelete={(id) => setData(dbService.deleteNote(id))}
-              onNavigateToArticle={(aid) => {
-                const article = data.articles.find(a => a.id === aid);
+              onDelete={(id: string) => setData(dbService.deleteNote(id))}
+              onNavigateToArticle={(aid: string) => {
+                const article = data.articles.find((a: Article) => a.id === aid);
                 if (article) handleOpenReader(article);
               }}
             />
@@ -351,7 +351,7 @@ const App: React.FC = () => {
                     article={article} 
                     allNotes={data.notes}
                     onUpdate={handleUpdateArticle} 
-                    onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+                    onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
                     onRead={() => handleOpenReader(article)}
                   />
                 ))}
@@ -417,7 +417,7 @@ const App: React.FC = () => {
                           value={inputSyncKey}
                           onChange={(e) => setInputSyncKey(e.target.value)}
                           placeholder="Paste existing Sync Key..."
-                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
+                          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-emerald-500"
                         />
                         <button 
                           onClick={handleSaveSyncKey}

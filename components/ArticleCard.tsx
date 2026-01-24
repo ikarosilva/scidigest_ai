@@ -19,7 +19,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const handleSummarize = async () => {
     setLoading(true);
     const result = await geminiService.summarizeArticle(article.title, article.abstract);
-    setSummary(result ?? null);
+    setSummary(result || null);
     setLoading(false);
   };
 
@@ -37,7 +37,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     Unknown: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
   };
 
-  const linkedNotes = allNotes.filter(n => article.noteIds.includes(n.id));
+  const linkedNotes = allNotes.filter((n: Note) => article.noteIds.includes(n.id));
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card">
@@ -83,7 +83,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       {linkedNotes.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-4">
           <span className="text-[9px] uppercase font-bold text-slate-500 tracking-widest block w-full mb-1">Linked Notes</span>
-          {linkedNotes.map(note => (
+          {linkedNotes.map((note: Note) => (
             <button 
               key={note.id}
               onClick={() => onNavigateToNote(note.id)}
@@ -114,7 +114,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       </div>
 
       <div className="flex flex-wrap gap-2 mb-4">
-        {article.tags.map(tag => (
+        {article.tags.map((tag: string) => (
           <span key={tag} className="text-[11px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">
             #{tag}
           </span>

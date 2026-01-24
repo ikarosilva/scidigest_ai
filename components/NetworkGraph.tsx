@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Article, Note, NetworkViewMode } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -22,7 +22,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   const [viewMode, setViewMode] = useState<NetworkViewMode>('unified');
   const [isMining, setIsMining] = useState(false);
   const [miningProgress, setMiningProgress] = useState(0);
-  // Fix: Added null as initial value to useRef to avoid TypeScript error "Expected 1 arguments, but got 0"
   const fgRef = useRef<any>(null);
 
   // Process data into Graph format (Nodes & Links)
@@ -31,7 +30,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     const links: any[] = [];
 
     if (viewMode === 'articles' || viewMode === 'unified') {
-      articles.forEach(article => {
+      articles.forEach((article: Article) => {
         nodes.push({
           id: article.id,
           name: article.title,
@@ -42,8 +41,8 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
 
         // Add citation links (Article -> Article)
         if (article.references) {
-          article.references.forEach(refTitle => {
-            const target = articles.find(a => a.title.toLowerCase().includes(refTitle.toLowerCase()) || refTitle.toLowerCase().includes(a.title.toLowerCase()));
+          article.references.forEach((refTitle: string) => {
+            const target = articles.find((a: Article) => a.title.toLowerCase().includes(refTitle.toLowerCase()) || refTitle.toLowerCase().includes(a.title.toLowerCase()));
             if (target) {
               links.push({
                 source: article.id,
@@ -59,7 +58,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
 
     if (viewMode === 'notes' || viewMode === 'unified') {
-      notes.forEach(note => {
+      notes.forEach((note: Note) => {
         nodes.push({
           id: note.id,
           name: note.title,
@@ -70,8 +69,8 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
 
         // Add links to articles (Note -> Article)
         if (viewMode === 'unified') {
-          note.articleIds.forEach(articleId => {
-            if (articles.find(a => a.id === articleId)) {
+          note.articleIds.forEach((articleId: string) => {
+            if (articles.find((a: Article) => a.id === articleId)) {
               links.push({
                 source: note.id,
                 target: articleId,
@@ -83,9 +82,9 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         }
 
         // Add links between notes (Note -> Note) based on shared articles
-        notes.forEach(otherNote => {
+        notes.forEach((otherNote: Note) => {
           if (note.id !== otherNote.id) {
-            const shared = note.articleIds.filter(id => otherNote.articleIds.includes(id));
+            const shared = note.articleIds.filter((id: string) => otherNote.articleIds.includes(id));
             if (shared.length > 0) {
               links.push({
                 source: note.id,
@@ -108,7 +107,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     setIsMining(true);
     setMiningProgress(0);
 
-    const papersToMine = articles.filter(a => !a.references || a.references.length === 0);
+    const papersToMine = articles.filter((a: Article) => !a.references || a.references.length === 0);
     let count = 0;
 
     for (const article of papersToMine) {
@@ -138,7 +137,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         
         <div className="flex items-center gap-3">
            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 flex">
-             {(['notes', 'articles', 'unified'] as NetworkViewMode[]).map(mode => (
+             {(['notes', 'articles', 'unified'] as NetworkViewMode[]).map((mode: NetworkViewMode) => (
                <button
                  key={mode}
                  onClick={() => setViewMode(mode)}
@@ -195,7 +194,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
               if (node.type === 'article') onNavigateToArticle(node.id);
               else onNavigateToNote(node.id);
             }}
-            nodeCanvasObject={(node: any, ctx, globalScale) => {
+            nodeCanvasObject={(node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
               const label = node.name;
               const fontSize = 12 / globalScale;
               ctx.font = `${fontSize}px Inter`;
@@ -203,7 +202,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
               const bckgDimensions: [number, number] = [textWidth, fontSize];
 
               ctx.fillStyle = 'rgba(2, 6, 23, 0.8)';
-              ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, ...bckgDimensions);
+              ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
 
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
