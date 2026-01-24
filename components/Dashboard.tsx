@@ -117,7 +117,7 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 h-[400px] flex flex-col relative overflow-hidden">
           <div className="flex justify-between items-start mb-4">
              <h3 className="text-lg font-bold text-slate-100">Rated Research Network</h3>
-             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">User Rating > 0</span>
+             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">User Rating &gt; 0</span>
           </div>
           <div className="flex-1 bg-slate-950/50 rounded-xl overflow-hidden border border-slate-800/50">
              {networkData.nodes.length > 0 ? (
