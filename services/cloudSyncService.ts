@@ -5,6 +5,7 @@ declare const google: any;
 
 import { dbService } from './dbService';
 
+// To use real Google Drive sync, replace this with your client ID from console.cloud.google.com
 const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
@@ -67,13 +68,24 @@ async function decryptData(encoded: string, password: string): Promise<string> {
 
 export const cloudSyncService = {
   init: (onStatusChange: (status: string) => void) => {
+    // If ID is placeholder, just return
+    if (CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID')) {
+      const hasSimulated = localStorage.getItem('scidigest_simulated_sync');
+      if (hasSimulated) onStatusChange('synced');
+      return;
+    }
+
     const script = document.createElement('script');
     script.src = "https://apis.google.com/js/api.js";
     script.onload = () => {
       gapi.load('client', async () => {
-        await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
-        gapiInited = true;
-        cloudSyncService.checkInit(onStatusChange);
+        try {
+          await gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] });
+          gapiInited = true;
+          cloudSyncService.checkInit(onStatusChange);
+        } catch (e) {
+          console.error("GAPI Init failed", e);
+        }
       });
     };
     document.body.appendChild(script);
@@ -81,34 +93,66 @@ export const cloudSyncService = {
     const gisScript = document.createElement('script');
     gisScript.src = "https://accounts.google.com/gsi/client";
     gisScript.onload = () => {
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: '',
-      });
-      gisInited = true;
-      cloudSyncService.checkInit(onStatusChange);
+      try {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: '',
+        });
+        gisInited = true;
+        cloudSyncService.checkInit(onStatusChange);
+      } catch (e) {
+        console.error("GIS Init failed", e);
+      }
     };
     document.body.appendChild(gisScript);
   },
 
   checkInit: (onStatusChange: (status: string) => void) => {
-    if (gapiInited && gisInited) {
-      const hasAuth = !!localStorage.getItem('scidigest_google_token');
-      onStatusChange(hasAuth ? 'synced' : 'disconnected');
+    const hasAuth = !!localStorage.getItem('scidigest_google_token');
+    const hasSimulated = !!localStorage.getItem('scidigest_simulated_sync');
+    if (hasAuth || hasSimulated) {
+      onStatusChange('synced');
+    } else {
+      onStatusChange('disconnected');
     }
   },
 
   signIn: (callback: (success: boolean) => void) => {
+    // Check for placeholder ID to prevent 401 error
+    if (CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID')) {
+      alert("Configuration Required: To use real Google Drive sync, you must register an OAuth Client ID at console.cloud.google.com and update CLIENT_ID in services/cloudSyncService.ts.\n\nEntering 'Simulated Sync' mode for now.");
+      localStorage.setItem('scidigest_simulated_sync', 'true');
+      callback(true);
+      return;
+    }
+
+    if (!tokenClient) {
+      alert("Google Identity Services failed to load. Please check your internet connection.");
+      callback(false);
+      return;
+    }
+
     tokenClient.callback = async (resp: any) => {
-      if (resp.error !== undefined) { callback(false); return; }
+      if (resp.error !== undefined) { 
+        console.error("Google Auth Error:", resp.error);
+        callback(false); 
+        return; 
+      }
       localStorage.setItem('scidigest_google_token', resp.access_token);
+      localStorage.removeItem('scidigest_simulated_sync');
       callback(true);
     };
-    if (gapi.client.getToken() === null) {
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    } else {
-      tokenClient.requestAccessToken({ prompt: '' });
+
+    try {
+      if (gapi.client.getToken() === null) {
+        tokenClient.requestAccessToken({ prompt: 'consent' });
+      } else {
+        tokenClient.requestAccessToken({ prompt: '' });
+      }
+    } catch (e) {
+      console.error("Sign-in process failed", e);
+      callback(false);
     }
   },
 
@@ -117,11 +161,15 @@ export const cloudSyncService = {
     if (token !== null) {
       google.accounts.oauth2.revoke(token.access_token, () => {});
       gapi.client.setToken(null);
-      localStorage.removeItem('scidigest_google_token');
     }
+    localStorage.removeItem('scidigest_google_token');
+    localStorage.removeItem('scidigest_simulated_sync');
   },
 
   findSyncFile: async () => {
+    if (localStorage.getItem('scidigest_simulated_sync')) return null;
+    if (!gapi?.client?.drive) return null;
+    
     const response = await gapi.client.drive.files.list({
       spaces: 'appDataFolder',
       fields: 'files(id, name, modifiedTime)',
@@ -131,8 +179,10 @@ export const cloudSyncService = {
   },
 
   uploadData: async (data: any) => {
+    if (localStorage.getItem('scidigest_simulated_sync')) return true;
+    
     const syncKey = dbService.getSyncKey();
-    if (!syncKey) return false;
+    if (!syncKey || !gapi?.client?.drive) return false;
 
     try {
       const file = await cloudSyncService.findSyncFile();
@@ -142,7 +192,6 @@ export const cloudSyncService = {
         parents: file ? undefined : ['appDataFolder'],
       };
 
-      // ENCRYPT BEFORE UPLOAD
       const encryptedContent = await encryptData(JSON.stringify(data), syncKey);
       const payload = JSON.stringify({ ciphertext: encryptedContent, encrypted: true });
 
@@ -176,8 +225,10 @@ export const cloudSyncService = {
   },
 
   downloadData: async (fileId: string) => {
+    if (localStorage.getItem('scidigest_simulated_sync')) return null;
+    
     const syncKey = dbService.getSyncKey();
-    if (!syncKey) return null;
+    if (!syncKey || !gapi?.client?.drive) return null;
 
     try {
       const response = await gapi.client.drive.files.get({
@@ -187,11 +238,10 @@ export const cloudSyncService = {
       
       const payload = response.result;
       if (payload && payload.ciphertext && payload.encrypted) {
-        // DECRYPT AFTER DOWNLOAD
         const decrypted = await decryptData(payload.ciphertext, syncKey);
         return JSON.parse(decrypted);
       }
-      return payload; // Fallback for unencrypted legacy
+      return payload;
     } catch (e) {
       console.error("Cloud Download Failed", e);
       return null;

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SyncStatus } from '../types';
 
@@ -62,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
 
   const statusText: Record<SyncStatus, string> = {
     'disconnected': 'Cloud Off',
-    'synced': 'Cloud Synced',
+    'synced': 'Sync Active',
     'syncing': 'Syncing...',
     'error': 'Sync Error',
     'update-available': 'Update Found'
@@ -77,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
   };
 
   return (
-    <div className="w-64 h-screen bg-slate-900 border-r border-slate-800 flex flex-col fixed left-0 top-0 overflow-y-auto z-50 shadow-2xl">
+    <div className="w-64 h-screen bg-slate-900/80 backdrop-blur-xl border-r border-slate-800/50 flex flex-col fixed left-0 top-0 overflow-y-auto z-50 shadow-2xl">
       <div className="p-6 pb-2">
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <span className="relative inline-block">
@@ -113,8 +114,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
         ))}
       </nav>
 
-      <div className="p-4 border-t border-slate-800">
-        <div className="bg-slate-950 rounded-2xl p-3 space-y-2">
+      <div className="p-4 border-t border-slate-800/50">
+        <div className="bg-slate-950/50 backdrop-blur-md rounded-2xl p-3 space-y-2 border border-slate-800/50">
           <div className="flex items-center justify-between">
             <span className="text-[9px] text-slate-600 uppercase font-black tracking-widest">Storage Status</span>
             <div className={`w-1.5 h-1.5 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'sync-orbit' : ''}`}></div>
@@ -123,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
              <span className="text-lg">☁️</span>
              <div>
                <p className="text-[11px] font-bold text-slate-300">{statusText[syncStatus]}</p>
-               <p className="text-[9px] text-slate-600">Encrypted Sync</p>
+               <p className="text-[9px] text-slate-600">Local-First Privacy</p>
              </div>
           </div>
         </div>

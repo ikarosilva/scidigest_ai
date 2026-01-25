@@ -1,8 +1,9 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Article } from '../types';
+import { geminiService } from '../services/geminiService';
 
 interface DashboardProps {
   articles: Article[];
@@ -13,6 +14,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNavigate, onRead, onUpdateArticle }) => {
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   // Process data for charts
   const tagCounts: Record<string, number> = {};
   articles.forEach((a: Article) => {
@@ -75,6 +79,25 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
     return `${mins}m ${seconds % 60}s`;
   };
 
+  const handleGenerateBriefing = async () => {
+    if (articles.length === 0) {
+      alert("Add some articles to your library first!");
+      return;
+    }
+    setIsGenerating(true);
+    const sample = articles.filter(a => a.shelfIds.includes('default-queue')).slice(0, 10);
+    const target = sample.length > 0 ? sample : articles.slice(0, 5);
+    
+    try {
+      const summary = await geminiService.synthesizeResearch(target, []);
+      setBriefing(summary || "No briefing could be generated.");
+    } catch (e) {
+      setBriefing("Error generating briefing. Please check your API key.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex justify-between items-end">
@@ -82,13 +105,42 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
           <h2 className="text-2xl font-bold text-slate-100">Research Insights</h2>
           <p className="text-slate-400">Overview of your academic ingestion and learning trends.</p>
         </div>
-        <button 
-          onClick={() => onNavigate('feed')}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all"
-        >
-          Check New Feeds →
-        </button>
+        <div className="flex gap-3">
+          <button 
+            onClick={handleGenerateBriefing}
+            disabled={isGenerating}
+            className={`text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${isGenerating ? 'bg-slate-700 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20'}`}
+          >
+            {isGenerating ? '🧬 Synthesizing...' : '🗞️ Daily Briefing'}
+          </button>
+          <button 
+            onClick={() => onNavigate('feed')}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-slate-700"
+          >
+            Check New Feeds →
+          </button>
+        </div>
       </header>
+
+      {briefing && (
+        <div className="bg-indigo-950/30 border border-indigo-500/30 p-8 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500 relative">
+          <button onClick={() => setBriefing(null)} className="absolute top-6 right-6 text-indigo-400 hover:text-white">✕</button>
+          <div className="flex items-center gap-3 mb-6">
+             <span className="text-2xl">🗞️</span>
+             <div>
+                <h3 className="text-xl font-bold text-indigo-300">Executive Intelligence Report</h3>
+                <p className="text-xs text-indigo-500 font-medium">Meta-analysis of your current reading queue</p>
+             </div>
+          </div>
+          <div className="prose prose-invert prose-indigo max-w-none text-indigo-100/80 text-sm leading-relaxed whitespace-pre-line font-serif italic">
+             {briefing}
+          </div>
+          <div className="mt-8 pt-4 border-t border-indigo-500/20 flex justify-between items-center">
+             <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">Targeted Insights</span>
+             <button onClick={() => setBriefing(null)} className="text-[10px] text-indigo-300 hover:text-white font-bold uppercase underline">Close Briefing</button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
@@ -169,50 +221,6 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
               <Legend />
             </PieChart>
           </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">
-          <h3 className="text-lg font-bold text-slate-100 mb-6">Quality Scores</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={ratingDistribution}>
-              <XAxis dataKey="rating" stroke="#94a3b8" />
-              <YAxis stroke="#94a3b8" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f1f5f9' }}
-                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
-              />
-              <Bar dataKey="count" fill="#818cf8" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Read History Preview */}
-        <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800 flex flex-col">
-          <h3 className="text-lg font-bold text-slate-100 mb-4">Reading History</h3>
-          <div className="space-y-3 flex-1 overflow-y-auto max-h-[250px] pr-2">
-            {articles.filter(a => a.userReadTime > 0).sort((a, b) => b.userReadTime - a.userReadTime).slice(0, 5).map(a => (
-              <div key={a.id} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800/50">
-                 <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-slate-200 truncate">{a.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                       <span className="text-[9px] text-slate-500 uppercase">{a.source}</span>
-                       <span className="w-1 h-1 rounded-full bg-slate-700"></span>
-                       <span className="text-[9px] text-indigo-400 font-bold">{Math.round((a.userReadTime / (a.estimatedReadTime || 20) / 60) * 100)}% Consumed</span>
-                    </div>
-                 </div>
-                 <div className="text-right ml-4">
-                    <p className="text-xs font-black text-slate-400">{Math.floor(a.userReadTime / 60)}m</p>
-                 </div>
-              </div>
-            ))}
-            {articles.filter(a => a.userReadTime > 0).length === 0 && (
-              <div className="h-full flex items-center justify-center text-center opacity-30 py-10">
-                 <p className="text-xs">No reading activity recorded yet.</p>
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </div>
