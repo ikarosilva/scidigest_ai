@@ -8,7 +8,7 @@ describe('Sidebar Component', () => {
   const mockSetTab = vi.fn();
   const mockOpenFeedback = vi.fn();
 
-  it('renders research group headers', () => {
+  it('renders research group headers and main logo', () => {
     render(
       <Sidebar 
         currentTab="feed" 
@@ -18,9 +18,25 @@ describe('Sidebar Component', () => {
       />
     );
     
+    expect(screen.getByText('SciDigest')).toBeInTheDocument();
     expect(screen.getByText('Discovery')).toBeInTheDocument();
     expect(screen.getByText('Workspace')).toBeInTheDocument();
+    expect(screen.getByText('Insights')).toBeInTheDocument();
     expect(screen.getByText('Help')).toBeInTheDocument();
+  });
+
+  it('highlights the current active tab', () => {
+    render(
+      <Sidebar 
+        currentTab="library" 
+        setTab={mockSetTab} 
+        onOpenFeedback={mockOpenFeedback} 
+        syncStatus="synced" 
+      />
+    );
+    
+    const libraryButton = screen.getByText('Library').closest('button');
+    expect(libraryButton).toHaveClass('bg-indigo-500/10');
   });
 
   it('calls setTab when a navigation item is clicked', () => {
@@ -33,9 +49,9 @@ describe('Sidebar Component', () => {
       />
     );
     
-    const libraryButton = screen.getByText('Library');
-    fireEvent.click(libraryButton);
-    expect(mockSetTab).toHaveBeenCalledWith('library');
+    const notesButton = screen.getByText('Notes');
+    fireEvent.click(notesButton);
+    expect(mockSetTab).toHaveBeenCalledWith('notes');
   });
 
   it('triggers feedback modal when Submit Issues is clicked', () => {

@@ -10,6 +10,12 @@ interface BookCardProps {
 const BookCard: React.FC<BookCardProps> = ({ book }) => {
   const [showShelfMenu, setShowShelfMenu] = useState(false);
   const shelves = dbService.getData().shelves;
+  const interests = dbService.getInterests();
+
+  // Filter tags to find ones that match global interests
+  const matchedInterests = (book.tags || []).filter(tag => 
+    interests.some(interest => tag.toLowerCase() === interest.toLowerCase())
+  );
 
   const toggleShelf = (shelfId: string) => {
     const isCurrentlyIn = book.shelfIds?.includes(shelfId);
@@ -53,6 +59,18 @@ const BookCard: React.FC<BookCardProps> = ({ book }) => {
       <p className="text-xs text-slate-400 mb-2 flex items-center gap-2">
         <span className="opacity-50">by</span> {book.author}
       </p>
+
+      {/* Matching Topics (Interests) */}
+      {matchedInterests.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {matchedInterests.map(topic => (
+            <span key={topic} className="text-[9px] font-black uppercase px-2 py-0.5 rounded border border-amber-500/40 text-amber-300 bg-amber-500/10 flex items-center gap-1.5 shadow-lg shadow-amber-500/5">
+              <span className="text-[10px]">🎯</span>
+              {topic}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Shelf Badges */}
       {activeShelvesCount > 0 && (

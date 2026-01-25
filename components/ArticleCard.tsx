@@ -20,6 +20,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const [showShelfMenu, setShowShelfMenu] = useState(false);
 
   const shelves = dbService.getData().shelves;
+  const interests = dbService.getInterests();
+  
+  // Filter tags to find ones that match global interests
+  const matchedInterests = (article.tags || []).filter(tag => 
+    interests.some(interest => tag.toLowerCase() === interest.toLowerCase())
+  );
 
   const handleSummarize = async () => {
     setLoading(true);
@@ -136,6 +142,18 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
         {article.title}
       </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
+
+      {/* Matching Topics (Interests) */}
+      {matchedInterests.length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {matchedInterests.map(topic => (
+            <span key={topic} className="text-[9px] font-black uppercase px-2 py-0.5 rounded border border-indigo-500/40 text-indigo-300 bg-indigo-500/10 flex items-center gap-1.5 shadow-lg shadow-indigo-500/5">
+              <span className="text-[10px]">🎯</span>
+              {topic}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Shelf Badges */}
       {activeShelvesCount > 0 && (

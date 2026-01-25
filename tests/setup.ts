@@ -22,10 +22,10 @@ Object.defineProperty(window, 'crypto', {
       return arr;
     },
     subtle: {
-      importKey: vi.fn(),
-      deriveKey: vi.fn(),
-      encrypt: vi.fn(),
-      decrypt: vi.fn(),
+      importKey: vi.fn().mockResolvedValue({}),
+      deriveKey: vi.fn().mockResolvedValue({}),
+      encrypt: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
+      decrypt: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
     }
   }
 });
@@ -44,3 +44,64 @@ class IntersectionObserver {
   disconnect = vi.fn();
 }
 Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObserver });
+
+// Mock Google API and Identity Services
+(globalThis as any).gapi = {
+  load: vi.fn((name, cb) => cb()),
+  client: {
+    init: vi.fn().mockResolvedValue({}),
+    getToken: vi.fn().mockReturnValue(null),
+    setToken: vi.fn(),
+    request: vi.fn().mockResolvedValue({}),
+    drive: {
+      files: {
+        list: vi.fn().mockResolvedValue({ result: { files: [] } }),
+        get: vi.fn().mockResolvedValue({ result: {} }),
+      }
+    }
+  }
+};
+
+(globalThis as any).google = {
+  accounts: {
+    oauth2: {
+      initTokenClient: vi.fn().mockReturnValue({
+        requestAccessToken: vi.fn(),
+      }),
+      revoke: vi.fn(),
+    },
+  },
+};
+
+// Mock @google/genai
+vi.mock('@google/genai', () => {
+  const mockGenerateContent = vi.fn().mockResolvedValue({
+    text: '{"title": "Test Paper", "abstract": "Test Abstract"}',
+    candidates: [{ content: { parts: [{ text: "Mock Response" }] } }]
+  });
+
+  return {
+    GoogleGenAI: vi.fn().mockImplementation(() => ({
+      models: {
+        generateContent: mockGenerateContent,
+        generateContentStream: vi.fn(),
+      }
+    })),
+    Type: {
+      OBJECT: 'OBJECT',
+      ARRAY: 'ARRAY',
+      STRING: 'STRING',
+      NUMBER: 'NUMBER',
+    },
+    Modality: {
+      AUDIO: 'AUDIO',
+      TEXT: 'TEXT',
+      IMAGE: 'IMAGE',
+    }
+  };
+});
+
+// Mock react-force-graph-2d to avoid canvas issues in JSDOM
+vi.mock('react-force-graph-2d', () => ({
+  default: () => null
+}));
