@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
+import Academy from './components/Academy';
 import ArticleCard from './components/ArticleCard';
 import BookCard from './components/BookCard';
 import FeedMonitor from './components/FeedMonitor';
+import Tracker from './components/Tracker';
 import FeedsSection from './components/FeedsSection';
 import ShelvesSection from './components/ShelvesSection';
 import TrendingSection from './components/TrendingSection';
@@ -13,7 +14,9 @@ import SettingsSection from './components/SettingsSection';
 import NetworkGraph from './components/NetworkGraph';
 import Reader from './components/Reader';
 import FeedbackModal from './components/FeedbackModal';
+import SynthesisModal from './components/SynthesisModal';
 import InterestsManager from './components/InterestsManager';
+import VersionSection from './components/VersionSection';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
@@ -34,7 +37,12 @@ const App: React.FC = () => {
   const [isSyncingScholar, setIsSyncingScholar] = useState(false);
   const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
   const [showImportBooks, setShowImportBooks] = useState(false);
+  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   
+  // Synthesis state
+  const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
+  const [showSynthesisModal, setShowSynthesisModal] = useState(false);
+
   // Cross-tab interaction state
   const [networkFocusId, setNetworkFocusId] = useState<string | null>(null);
 
@@ -56,6 +64,21 @@ const App: React.FC = () => {
       setSyncStatus(status as SyncStatus);
     });
   }, []);
+
+  const ensureApiKey = async () => {
+    if (window.aistudio && !(await window.aistudio.hasSelectedApiKey())) {
+      setShowApiKeyDialog(true);
+      return false;
+    }
+    return true;
+  };
+
+  const handleOpenSelectKey = async () => {
+    if (window.aistudio) {
+      await window.aistudio.openSelectKey();
+      setShowApiKeyDialog(false);
+    }
+  };
 
   const performCloudSync = useCallback(async (localData: AppState) => {
     if (syncStatus === 'disconnected' || syncStatus === 'error') return;
@@ -168,6 +191,9 @@ const App: React.FC = () => {
   };
 
   const handleSyncScholarArticles = async () => {
+    const hasKey = await ensureApiKey();
+    if (!hasKey) return;
+
     let currentProfiles = { ...data.socialProfiles };
     
     if (!currentProfiles.name && !currentProfiles.googleScholar) {
@@ -184,7 +210,6 @@ const App: React.FC = () => {
     }
     
     setIsSyncingScholar(true);
-    console.log("Starting Scholar Sync for:", currentProfiles.name || currentProfiles.googleScholar);
 
     try {
       const scholarPapers = await geminiService.fetchScholarArticles(currentProfiles);
@@ -236,7 +261,12 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error("Scholar Sync Critical Error:", err);
-      alert("Failed to connect to search service. Ensure your API key is valid and the profile is public.");
+      if (err instanceof Error && err.message.includes("Requested entity was not found")) {
+        alert("Your API key configuration appears invalid. Please reconnect.");
+        setShowApiKeyDialog(true);
+      } else {
+        alert("Failed to connect to search service. Ensure your profile is public and Google Search Grounding is available.");
+      }
     } finally {
       setIsSyncingScholar(false);
     }
@@ -337,6 +367,12 @@ const App: React.FC = () => {
     });
   }, [data.books, searchQuery]);
 
+  const toggleSelection = (id: string) => {
+    setSelectedArticleIds(prev => 
+      prev.includes(id) ? prev.filter(aid => aid !== id) : [...prev, id]
+    );
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
       <Sidebar 
@@ -347,16 +383,58 @@ const App: React.FC = () => {
       />
       
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      
+      {showSynthesisModal && (
+        <SynthesisModal 
+          articles={data.articles.filter(a => selectedArticleIds.includes(a.id))}
+          notes={data.notes.filter(n => n.articleIds.some(aid => selectedArticleIds.includes(aid)))}
+          onClose={() => setShowSynthesisModal(false)}
+        />
+      )}
+
+      {/* API Key Modal */}
+      {showApiKeyDialog && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center space-y-6">
+            <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">🔑</span>
+            </div>
+            <h3 className="text-2xl font-bold text-white">Connect Pro Assistant</h3>
+            <p className="text-slate-400 text-sm">
+              Advanced features like Google Scholar Sync and Deep Research require a project-linked API key. 
+              Please select a key from a project with <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-indigo-400 underline">billing enabled</a>.
+            </p>
+            <button 
+              onClick={handleOpenSelectKey}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all shadow-xl shadow-indigo-600/20"
+            >
+              Select Google Cloud Key
+            </button>
+            <button 
+              onClick={() => setShowApiKeyDialog(false)}
+              className="text-slate-500 hover:text-slate-300 text-xs font-bold"
+            >
+              Skip (Pro features will be disabled)
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 ml-64 p-8">
         <div className="max-w-6xl mx-auto">
-          {currentTab === 'dashboard' && (
-            <Dashboard 
+          {currentTab === 'academy' && (
+            <Academy 
               articles={data.articles} 
               totalReadTime={data.totalReadTime}
               onNavigate={setCurrentTab} 
               onRead={handleOpenReader} 
-              onUpdateArticle={handleUpdateArticle}
+            />
+          )}
+
+          {currentTab === 'tracker' && (
+            <Tracker 
+              onAdd={handleAddArticle} 
+              onRead={handleOpenReader} 
             />
           )}
           
@@ -433,6 +511,14 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <div className="flex gap-3">
+                    {selectedArticleIds.length > 0 && (
+                      <button 
+                        onClick={() => setShowSynthesisModal(true)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-sm font-black transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 animate-in zoom-in"
+                      >
+                        ✨ Synthesize ({selectedArticleIds.length})
+                      </button>
+                    )}
                     <button 
                       onClick={handleSyncScholarArticles}
                       disabled={isSyncingScholar}
@@ -514,19 +600,33 @@ const App: React.FC = () => {
                 {/* Articles Section */}
                 {filteredArticles.length > 0 && (
                   <section>
-                    <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                      <span className="w-8 h-[1px] bg-slate-800"></span> Research Articles
-                    </h3>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-8 h-[1px] bg-slate-800"></span> Research Articles
+                      </h3>
+                      {selectedArticleIds.length > 0 && (
+                        <button onClick={() => setSelectedArticleIds([])} className="text-[10px] text-slate-600 hover:text-slate-300 font-bold uppercase">Deselect All</button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {filteredArticles.map((article: Article) => (
-                        <ArticleCard 
-                          key={article.id} 
-                          article={article} 
-                          allNotes={data.notes}
-                          onUpdate={handleUpdateArticle} 
-                          onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
-                          onRead={() => handleOpenReader(article)}
-                        />
+                        <div key={article.id} className="relative">
+                          <button 
+                            onClick={() => toggleSelection(article.id)}
+                            className={`absolute -top-2 -left-2 z-20 w-6 h-6 rounded-full border-2 transition-all flex items-center justify-center text-[10px] font-bold ${
+                              selectedArticleIds.includes(article.id) ? 'bg-indigo-600 border-white text-white' : 'bg-slate-800 border-slate-700 text-transparent'
+                            }`}
+                          >
+                            ✓
+                          </button>
+                          <ArticleCard 
+                            article={article} 
+                            allNotes={data.notes}
+                            onUpdate={handleUpdateArticle} 
+                            onNavigateToNote={(nid: string) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+                            onRead={() => handleOpenReader(article)}
+                          />
+                        </div>
                       ))}
                     </div>
                   </section>
@@ -593,6 +693,8 @@ const App: React.FC = () => {
               onUpdateSocialProfiles={handleUpdateSocialProfiles}
             />
           )}
+
+          {currentTab === 'version' && <VersionSection />}
 
           {currentTab === 'portability' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Article, Note } from '../types';
+import { Article, Note, QuizStatus, ReadingMode, FeedSourceType } from '../types';
 import { geminiService } from '../services/geminiService';
+import { dbService } from '../services/dbService';
 
 interface ReaderProps {
   article: Article | null;
@@ -13,25 +14,54 @@ interface ReaderProps {
   onAddReadTime: (id: string, seconds: number) => void;
 }
 
+interface QuizQuestion {
+  question: string;
+  options: string[];
+  correctIndex: number;
+}
+
 const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, onUpdateNote, onCreateNote, onUpdateArticle, onAddReadTime }) => {
   const [markdown, setMarkdown] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel'>('notes');
+  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'reviewer' | 'quiz' | 'citations'>('notes');
+  const [readingMode, setReadingMode] = useState<ReadingMode>('default');
+  
   const [critique, setCritique] = useState<string | null>(null);
   const [isCritiquing, setIsCritiquing] = useState(false);
   
+  const [reviewer2Output, setReviewer2Output] = useState<string | null>(null);
+  const [isReviewer2Loading, setIsReviewer2Loading] = useState(false);
+  
   const [aiDetection, setAiDetection] = useState<{ probability: number, assessment: string, markers: string[] } | null>(null);
   const [isDetectingAI, setIsDetectingAI] = useState(false);
+
+  // Rabbit Hole State
+  const [enteringRabbitHole, setEnteringRabbitHole] = useState(false);
+  const [ingestingId, setIngestingId] = useState<string | null>(null);
+
+  // Quiz State
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
+  const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
+  const [quizStep, setQuizStep] = useState<'intro' | 'active' | 'results'>('intro');
+  const [quizScore, setQuizScore] = useState<number | null>(null);
   
   const timerRef = useRef<number | null>(null);
+  const aiConfig = dbService.getAIConfig();
+  const libraryArticles = dbService.getData().articles;
 
   useEffect(() => {
     if (article) {
       setSessionSeconds(0);
-      setCritique(null); // Reset critique when changing papers
-      setAiDetection(null); // Reset detection
+      setCritique(null); 
+      setReviewer2Output(null);
+      setAiDetection(null); 
+      setQuizQuestions([]);
+      setUserAnswers({});
+      setQuizStep('intro');
+      setQuizScore(null);
       timerRef.current = window.setInterval(() => {
         setSessionSeconds(prev => prev + 1);
       }, 1000);
@@ -104,6 +134,85 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
   };
 
+  const handleEnterRabbitHole = async () => {
+    if (!article) return;
+    setEnteringRabbitHole(true);
+    try {
+      const refs = await geminiService.discoverReferences(article);
+      onUpdateArticle(article.id, { references: refs });
+    } catch (err) {
+      console.error(err);
+      alert("Failed to enter Rabbit Hole. Ensure Search Grounding is available.");
+    } finally {
+      setEnteringRabbitHole(false);
+    }
+  };
+
+  const handleIngestCitation = async (citationStr: string) => {
+    setIngestingId(citationStr);
+    try {
+      const details = await geminiService.fetchArticleDetails(citationStr);
+      if (details && details.title) {
+        const newArticle: Article = {
+          id: Math.random().toString(36).substr(2, 9),
+          title: details.title,
+          authors: details.authors || [],
+          abstract: details.abstract || '',
+          date: `${details.year || '2024'}-01-01`,
+          year: details.year || 'Unknown',
+          source: FeedSourceType.MANUAL,
+          rating: 0,
+          tags: details.tags || ['Rabbit Hole Discovery'],
+          isBookmarked: false,
+          notes: `Ingested from Rabbit Hole of: ${article?.title}`,
+          noteIds: [],
+          userReadTime: 0,
+          pdfUrl: details.pdfUrl,
+          shelfIds: ['default-queue'],
+          userReviews: {
+            sentiment: 'Unknown',
+            summary: 'Citation discovered via AI Rabbit Hole explorer.',
+            citationCount: (details as any).citationCount || 0
+          }
+        };
+        dbService.addArticle(newArticle);
+        window.dispatchEvent(new CustomEvent('db-update'));
+        alert(`"${newArticle.title}" added to your library!`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to ingest citation details.");
+    } finally {
+      setIngestingId(null);
+    }
+  };
+
+  const findLibraryMatch = (citationStr: string) => {
+    const titleOnly = citationStr.split(',')[0].toLowerCase().trim();
+    return libraryArticles.find(a => 
+      a.title.toLowerCase().includes(titleOnly) || 
+      titleOnly.includes(a.title.toLowerCase())
+    );
+  };
+
+  const handleSummonReviewer2 = async () => {
+    if (!article) return;
+    setIsReviewer2Loading(true);
+    try {
+      const result = await geminiService.reviewAsReviewer2(
+        article.title, 
+        article.abstract, 
+        aiConfig.reviewer2Prompt
+      );
+      setReviewer2Output(result || "Reviewer 2 found the paper so lacking they didn't even respond.");
+    } catch (err) {
+      console.error(err);
+      setReviewer2Output("An error occurred. Reviewer 2 is likely writing an angry rebuttal.");
+    } finally {
+      setIsReviewer2Loading(false);
+    }
+  };
+
   const handleGenerateCritique = async () => {
     if (!article) return;
     setIsCritiquing(true);
@@ -131,6 +240,42 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
+  const handleGenerateQuiz = async () => {
+    if (!article) return;
+    setIsGeneratingQuiz(true);
+    try {
+      const questions = await geminiService.generateQuiz(article.title, article.abstract);
+      if (questions && questions.length > 0) {
+        setQuizQuestions(questions);
+        setQuizStep('active');
+        setUserAnswers({});
+      } else {
+        alert("Could not generate a quiz for this article.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error generating quiz.");
+    } finally {
+      setIsGeneratingQuiz(false);
+    }
+  };
+
+  const handleQuizFinish = () => {
+    if (!article || quizQuestions.length === 0) return;
+    
+    let score = 0;
+    quizQuestions.forEach((q, idx) => {
+      if (userAnswers[idx] === q.correctIndex) {
+        score++;
+      }
+    });
+
+    const status: QuizStatus = score >= 7 ? 'pass' : 'fail';
+    setQuizScore(score);
+    setQuizStep('results');
+    onUpdateArticle(article.id, { quizStatus: status });
+  };
+
   const toggleMaximize = () => {
     setIsMaximized(!isMaximized);
   };
@@ -141,29 +286,53 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getFilterStyle = (): React.CSSProperties => {
+    switch (readingMode) {
+      case 'paper':
+        return { backgroundColor: 'rgba(244, 236, 216, 0.15)', mixBlendMode: 'multiply' };
+      case 'night':
+        return { backgroundColor: 'rgba(255, 100, 0, 0.1)', mixBlendMode: 'multiply' };
+      default:
+        return { display: 'none' };
+    }
+  };
+
+  const getReaderClasses = () => {
+    switch (readingMode) {
+      case 'paper':
+        return 'bg-[#f4ecd8]';
+      case 'night':
+        return 'bg-[#1a1110]';
+      default:
+        return 'bg-slate-900';
+    }
+  };
+
+  const getTextClasses = () => {
+    switch (readingMode) {
+      case 'paper':
+        return 'text-[#5b4636]';
+      case 'night':
+        return 'text-[#d48a85]';
+      default:
+        return 'text-slate-300';
+    }
+  };
+
+  // Fix: Defined missing containerClasses variable
+  const containerClasses = `flex flex-col h-full space-y-4 animate-in fade-in duration-500 ${isMaximized ? 'fixed inset-0 z-[100] p-8 bg-slate-950' : ''}`;
+
+  // Fix: Added early return if no article is selected to avoid runtime property access errors
   if (!article) {
     return (
-      <div className="h-[calc(100vh-120px)] flex flex-col items-center justify-center text-center p-10 bg-slate-900/50 border border-dashed border-slate-800 rounded-3xl animate-in fade-in duration-500">
-        <div className="bg-slate-900 w-24 h-24 rounded-full flex items-center justify-center mb-6 shadow-2xl border border-slate-800">
-          <span className="text-4xl">📖</span>
-        </div>
-        <h3 className="text-2xl font-bold text-slate-200">Reader is Empty</h3>
-        <p className="text-slate-500 mt-2 max-w-sm">
-          Select an article from your library or feeds to begin reading and annotating.
-        </p>
-        <button 
-          onClick={onNavigateToLibrary}
-          className="mt-8 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-3 rounded-2xl transition-all hover:scale-105 shadow-xl shadow-indigo-600/20"
-        >
-          Go to Library
-        </button>
+      <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-50">
+        <span className="text-5xl mb-4">📖</span>
+        <h3 className="text-xl font-bold text-slate-100">No article selected</h3>
+        <p className="text-slate-400 max-w-xs mt-2 text-sm">Select a paper from your library to start reading and annotating.</p>
+        <button onClick={onNavigateToLibrary} className="mt-6 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold transition-all hover:scale-105 shadow-xl shadow-indigo-600/20">Go to Library</button>
       </div>
     );
   }
-
-  const containerClasses = isMaximized 
-    ? "fixed inset-0 z-[100] bg-slate-950 p-4 flex flex-col gap-4 animate-in zoom-in duration-300" 
-    : "h-[calc(100vh-120px)] flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500";
 
   return (
     <div className={containerClasses}>
@@ -180,6 +349,14 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Session</span>
                   <span className="text-xs font-mono font-bold text-emerald-400">{formatTime(sessionSeconds)}</span>
                </div>
+               {article.quizStatus && article.quizStatus !== 'not-taken' && (
+                 <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Quiz</span>
+                    <span className={`text-[10px] font-black uppercase ${article.quizStatus === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {article.quizStatus}
+                    </span>
+                 </div>
+               )}
             </div>
             <h2 className="text-lg font-bold text-slate-100 truncate ml-auto">{article.title}</h2>
           </div>
@@ -203,6 +380,30 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         </div>
         
         <div className="flex items-center gap-3">
+          <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
+             <button 
+               onClick={() => setReadingMode('default')}
+               className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'default' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+               title="Standard Dark Mode"
+             >
+               Normal
+             </button>
+             <button 
+               onClick={() => setReadingMode('paper')}
+               className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'paper' ? 'bg-amber-100 text-amber-900 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+               title="Sepia Paper Mode"
+             >
+               Paper
+             </button>
+             <button 
+               onClick={() => setReadingMode('night')}
+               className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'night' ? 'bg-orange-950 text-orange-400 shadow-md border border-orange-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+               title="Warm Night Mode"
+             >
+               Night
+             </button>
+          </div>
+
           <button 
             onClick={handlePerplexityCrossCheck}
             className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl border border-emerald-500/20 transition-all flex items-center gap-2 group"
@@ -232,11 +433,16 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       </header>
 
       <div className="flex-1 flex gap-4 overflow-hidden">
-        <div className="flex-[7] bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative">
+        <div className={`flex-[6] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative transition-colors duration-500 ${getReaderClasses()}`}>
+          <div 
+            className="absolute inset-0 pointer-events-none z-10 transition-colors duration-500" 
+            style={getFilterStyle()}
+          />
+          
           {article.pdfUrl ? (
             <iframe 
               src={`${article.pdfUrl}#toolbar=0`}
-              className="w-full h-full border-none"
+              className={`w-full h-full border-none transition-all duration-500 ${readingMode === 'night' ? 'invert hue-rotate-180 brightness-90 contrast-110' : ''}`}
               title={article.title}
             />
           ) : (
@@ -256,31 +462,285 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           )}
         </div>
 
-        <div className="flex-[3] bg-slate-900 border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-xl">
-          <div className="flex border-b border-slate-800 bg-slate-950/50">
+        <div className={`flex-[4] border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-xl transition-colors duration-500 ${getReaderClasses()}`}>
+          <div className="flex border-b border-slate-800 bg-slate-950/50 overflow-x-auto no-scrollbar">
             <button 
               onClick={() => setSidebarTab('notes')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${sidebarTab === 'notes' ? 'bg-slate-900 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'notes' ? 'bg-slate-900 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
             >
               ✍️ Notes
             </button>
             <button 
               onClick={() => setSidebarTab('intel')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all ${sidebarTab === 'intel' ? 'bg-slate-900 text-emerald-400 border-b-2 border-emerald-500' : 'text-slate-600 hover:text-slate-400'}`}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'intel' ? 'bg-slate-900 text-emerald-400 border-b-2 border-emerald-500' : 'text-slate-600 hover:text-slate-400'}`}
             >
-              📡 Extern Intel
+              📡 Intel
+            </button>
+            <button 
+              onClick={() => setSidebarTab('citations')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'citations' ? 'bg-slate-900 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
+            >
+              🐇 Rabbit Hole
+            </button>
+            <button 
+              onClick={() => setSidebarTab('reviewer')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'reviewer' ? 'bg-slate-950 text-red-400 border-b-2 border-red-500' : 'text-slate-600 hover:text-slate-400'}`}
+            >
+              👿 Reviewer 2
+            </button>
+            <button 
+              onClick={() => setSidebarTab('quiz')}
+              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'quiz' ? 'bg-slate-950 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
+            >
+              🎓 Quiz
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {sidebarTab === 'notes' ? (
+            {sidebarTab === 'notes' && (
               <textarea
                 value={markdown}
                 onChange={handleMarkdownChange}
                 placeholder="Start typing your Markdown annotations here... Your notes are automatically saved to your Research Notes library."
-                className="w-full h-full bg-slate-950 p-6 text-sm text-slate-300 outline-none border-none resize-none font-mono leading-relaxed placeholder:text-slate-700"
+                className={`w-full h-full p-6 text-sm outline-none border-none resize-none font-mono leading-relaxed transition-colors duration-500 bg-transparent ${getTextClasses()}`}
               />
-            ) : (
+            )}
+
+            {sidebarTab === 'citations' && (
+              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🐇</div>
+                    <div>
+                      <h4 className="text-sm font-bold text-indigo-400">Rabbit Hole Explorer</h4>
+                      <p className="text-[10px] text-indigo-500/70 font-medium">Deep dive into the article's academic network.</p>
+                    </div>
+                  </div>
+                  {!article.references?.length && (
+                    <button 
+                      onClick={handleEnterRabbitHole}
+                      disabled={enteringRabbitHole}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all"
+                    >
+                      {enteringRabbitHole ? 'Diving...' : 'Enter Rabbit Hole'}
+                    </button>
+                  )}
+                </header>
+
+                {article.references?.length ? (
+                  <div className="space-y-3">
+                    {article.references.map((citation, idx) => {
+                      const match = findLibraryMatch(citation);
+                      const isIngesting = ingestingId === citation;
+                      
+                      return (
+                        <div key={idx} className={`p-4 rounded-2xl border transition-all ${match ? 'bg-indigo-600/10 border-indigo-500/30' : 'bg-slate-950/40 border-slate-800'}`}>
+                           <p className={`text-[11px] font-medium leading-relaxed mb-3 ${getTextClasses()}`}>{citation}</p>
+                           <div className="flex justify-between items-center">
+                              {match ? (
+                                <button 
+                                  onClick={() => {
+                                    alert(`Paper "${match.title}" is already in your library. Jump to it in Library tab.`);
+                                  }}
+                                  className="text-[10px] bg-indigo-600 text-white font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg shadow-lg"
+                                >
+                                  📖 Open in Library
+                                </button>
+                              ) : (
+                                <button 
+                                  onClick={() => handleIngestCitation(citation)}
+                                  disabled={isIngesting}
+                                  className={`text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg transition-all ${isIngesting ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 text-indigo-400 hover:bg-indigo-500 hover:text-white'}`}
+                                >
+                                  {isIngesting ? '🔍 Hydrating Details...' : '📥 Ingest to Library'}
+                                </button>
+                              )}
+                              <span className={`text-[9px] font-bold uppercase ${match ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                {match ? '✓ Library Match' : 'New Trail'}
+                              </span>
+                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 opacity-40">
+                     <span className="text-4xl block mb-4">🕳️</span>
+                     <p className="text-xs">No path found yet. Enter the Rabbit Hole to map the bibliography.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sidebarTab === 'quiz' && (
+              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🎓</div>
+                  <div>
+                    <h4 className="text-sm font-bold text-indigo-400">Knowledge Validation</h4>
+                    <p className="text-[10px] text-indigo-500/70 font-medium">Test your conceptual understanding of the core research claims.</p>
+                  </div>
+                </header>
+
+                {quizStep === 'intro' && (
+                  <div className="text-center py-12 space-y-6">
+                    <p className="text-xs text-slate-500 italic px-4 leading-relaxed">
+                      "A senior researcher must not only read, but internalize. This conceptual quiz measures your grasp of methodology and outcomes."
+                    </p>
+                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-left">
+                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Protocol:</p>
+                       <ul className="text-[10px] text-slate-400 space-y-1 ml-4 list-disc">
+                         <li>10 Multiple Choice Questions</li>
+                         <li>Conceptual Focus (Methodology & Results)</li>
+                         <li>Pass Mark: 7/10</li>
+                         <li>Status logged to local research library</li>
+                       </ul>
+                    </div>
+                    <button 
+                      onClick={handleGenerateQuiz}
+                      disabled={isGeneratingQuiz}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-8 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all border border-indigo-500/20 flex items-center justify-center mx-auto gap-3"
+                    >
+                      {isGeneratingQuiz ? (
+                        <>
+                          <span className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+                          Constructing Exam...
+                        </>
+                      ) : "Generate 10-Question Quiz"}
+                    </button>
+                  </div>
+                )}
+
+                {quizStep === 'active' && (
+                  <div className="space-y-8 animate-in fade-in duration-500">
+                    {quizQuestions.map((q, qIdx) => (
+                      <div key={qIdx} className="space-y-4">
+                        <p className={`text-xs font-bold leading-relaxed ${getTextClasses()}`}>
+                          <span className="text-indigo-500 mr-2">{qIdx + 1}.</span> {q.question}
+                        </p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {q.options.map((opt, oIdx) => (
+                            <button
+                              key={oIdx}
+                              onClick={() => setUserAnswers(prev => ({ ...prev, [qIdx]: oIdx }))}
+                              className={`text-left p-3 rounded-xl text-[11px] border transition-all ${
+                                userAnswers[qIdx] === oIdx 
+                                ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/10' 
+                                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                              }`}
+                            >
+                              <span className="w-5 h-5 inline-flex items-center justify-center rounded-full bg-slate-900 mr-3 text-[9px] font-bold border border-slate-800">
+                                {String.fromCharCode(65 + oIdx)}
+                              </span>
+                              {opt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <button 
+                      onClick={handleQuizFinish}
+                      disabled={Object.keys(userAnswers).length < 10}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black text-[10px] uppercase tracking-widest py-4 rounded-2xl shadow-xl transition-all border border-emerald-500/20"
+                    >
+                      {Object.keys(userAnswers).length < 10 ? `Answer All Questions (${Object.keys(userAnswers).length}/10)` : "Submit Examination"}
+                    </button>
+                  </div>
+                )}
+
+                {quizStep === 'results' && (
+                  <div className="text-center py-12 space-y-8 animate-in zoom-in-95 duration-300">
+                    <div className="space-y-2">
+                       <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto text-4xl shadow-2xl border-4 ${quizScore! >= 7 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-red-500/10 border-red-500 text-red-400'}`}>
+                         {quizScore! >= 7 ? '🏆' : '📚'}
+                       </div>
+                       <h3 className={`text-2xl font-black uppercase tracking-widest mt-4 ${quizScore! >= 7 ? 'text-emerald-400' : 'text-red-400'}`}>
+                         {quizScore! >= 7 ? 'EXAMINATION PASSED' : 'EXAMINATION FAILED'}
+                       </h3>
+                       <p className="text-sm font-bold text-slate-500">You scored {quizScore} out of 10</p>
+                    </div>
+
+                    <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800 space-y-4 text-left">
+                       <p className="text-[10px] font-black uppercase text-slate-600 tracking-widest mb-2">Review Summary</p>
+                       <div className="space-y-3">
+                          {quizQuestions.map((q, idx) => (
+                            <div key={idx} className="flex gap-3 text-[10px]">
+                               <span className={userAnswers[idx] === q.correctIndex ? 'text-emerald-400' : 'text-red-400'}>
+                                  {userAnswers[idx] === q.correctIndex ? '✓' : '✕'}
+                               </span>
+                               <p className="text-slate-400 line-clamp-1">{q.question}</p>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                       <button 
+                         onClick={() => setQuizStep('intro')}
+                         className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase py-3 rounded-xl transition-all"
+                       >
+                         Retake Exam
+                       </button>
+                       <button 
+                         onClick={() => setSidebarTab('notes')}
+                         className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase py-3 rounded-xl transition-all shadow-xl shadow-indigo-600/20"
+                       >
+                         Go to Notes
+                       </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {sidebarTab === 'reviewer' && (
+              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <header className="bg-red-900/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-4">
+                  <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-xl shrink-0">👿</div>
+                  <div>
+                    <h4 className="text-sm font-bold text-red-400">Reviewer 2 Protocol</h4>
+                    <p className="text-[10px] text-red-500/70 font-medium">Expect dismissal, harsh critiques, and identifying fundamental flaws.</p>
+                  </div>
+                </header>
+
+                {!reviewer2Output && !isReviewer2Loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-xs text-slate-500 mb-6 italic px-4">"Your methodology is likely derivative, and your conclusions are probably overstated."</p>
+                    <button 
+                      onClick={handleSummonReviewer2}
+                      className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-6 rounded-2xl shadow-xl shadow-red-600/20 transition-all border border-red-500/20"
+                    >
+                      Summon Reviewer 2
+                    </button>
+                  </div>
+                ) : isReviewer2Loading ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <div className="w-12 h-12 border-4 border-red-500/10 border-t-red-500 rounded-full animate-spin"></div>
+                    <p className="text-[10px] text-red-400 font-black uppercase tracking-widest animate-pulse">Finding reasons to reject...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="bg-slate-950/60 border border-red-500/20 p-5 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-line font-serif shadow-inner">
+                      {reviewer2Output}
+                    </div>
+                    <button 
+                      onClick={handleSummonReviewer2}
+                      className="w-full text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase transition-colors"
+                    >
+                      Request Re-Review (Still Rejected)
+                    </button>
+                  </div>
+                )}
+                
+                <div className="pt-6 border-t border-slate-800">
+                  <p className="text-[9px] text-slate-600 italic text-center leading-relaxed">
+                    Reviewer 2's persona is configurable in the Settings tab. They are notoriously hard to please.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {sidebarTab === 'intel' && (
               <div className="p-6 space-y-8 animate-in fade-in duration-300 pb-20">
                 <section>
                    <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">AI Critical Appraisal</h4>
@@ -300,7 +760,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest animate-pulse">Analyzing Methods...</p>
                      </div>
                    ) : (
-                     <div className="bg-slate-950 p-5 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 leading-relaxed whitespace-pre-line relative group">
+                     <div className="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 leading-relaxed whitespace-pre-line relative group">
                         <button 
                           onClick={() => setCritique(null)}
                           className="absolute top-2 right-2 text-slate-600 hover:text-white transition-colors"
@@ -330,7 +790,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest animate-pulse">Scanning Linguistically...</p>
                      </div>
                    ) : aiDetection && (
-                     <div className="bg-slate-950 p-5 rounded-2xl border border-amber-500/20 space-y-3 relative group">
+                     <div className="bg-slate-950/60 p-5 rounded-2xl border border-amber-500/20 space-y-3 relative group">
                         <button 
                           onClick={() => setAiDetection(null)}
                           className="absolute top-2 right-2 text-slate-600 hover:text-white transition-colors"
@@ -367,7 +827,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                    <div className="space-y-3">
                       <button 
                         onClick={handlePerplexityCrossCheck}
-                        className="w-full bg-slate-950 border border-slate-800 hover:border-emerald-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
+                        className="w-full bg-slate-950/40 border border-slate-800 hover:border-emerald-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
                       >
                          <div>
                             <p className="text-[11px] font-bold text-slate-300">Perplexity Deep Dive</p>
@@ -378,7 +838,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                       
                       <button 
                         onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')}
-                        className="w-full bg-slate-950 border border-slate-800 hover:border-indigo-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
+                        className="w-full bg-slate-950/40 border border-slate-800 hover:border-indigo-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
                       >
                          <div>
                             <p className="text-[11px] font-bold text-slate-300">Google Scholar Network</p>
@@ -396,9 +856,13 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             )}
           </div>
           
-          <div className="p-3 bg-slate-950 border-t border-slate-800 flex justify-between items-center">
-            <span className="text-[9px] text-slate-600 font-bold uppercase">{sidebarTab === 'notes' ? 'Markdown Editor' : 'Research Intel Panel'}</span>
-            <span className="text-[9px] text-slate-600 font-medium">{sidebarTab === 'notes' ? 'Linked to Research Notes' : 'Grounded AI Analysis'}</span>
+          <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex justify-between items-center">
+            <span className="text-[9px] text-slate-600 font-bold uppercase">
+              {sidebarTab === 'notes' ? 'Markdown Editor' : sidebarTab === 'intel' ? 'Research Intel Panel' : sidebarTab === 'reviewer' ? 'Critical Rejection Simulation' : 'Conceptual Examination'}
+            </span>
+            <span className="text-[9px] text-slate-600 font-medium">
+              {sidebarTab === 'notes' ? 'Linked to Research Notes' : 'Grounded AI Analysis'}
+            </span>
           </div>
         </div>
       </div>

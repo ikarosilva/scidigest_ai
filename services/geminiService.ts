@@ -7,6 +7,128 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const geminiService = {
   /**
+   * Performs cross-document synthesis on a collection of articles and notes.
+   */
+  async synthesizeResearch(articles: Article[], notes: string[]) {
+    const ai = getAI();
+    const context = articles.map(a => `PAPER: ${a.title}\nABSTRACT: ${a.abstract}`).join('\n\n');
+    const notesContext = notes.length > 0 ? `\n\nUSER NOTES:\n${notes.join('\n---\n')}` : '';
+
+    const prompt = `
+      As a principal investigator, synthesize the following research papers and associated annotations into a high-level scientific report.
+      
+      RESEARCH CONTEXT:
+      ${context}
+      ${notesContext}
+
+      GOALS:
+      1. Identify the common thread or conflict between these works.
+      2. Highlight the most significant methodological breakthrough across the set.
+      3. Suggest a "Next Step" for research based on these findings.
+
+      Format the output in professional Markdown with clear sections.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: prompt,
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Synthesis Error:", error);
+      return "An error occurred during multi-document synthesis.";
+    }
+  },
+
+  /**
+   * Discovers forward citations and author updates via live search.
+   */
+  async getRadarUpdates(trackedPapers: string[], trackedAuthors: string[]): Promise<any[]> {
+    const ai = getAI();
+    const prompt = `
+      Act as an automated research radar. Your goal is to find the latest (2024-2025) academic activity regarding specific papers and authors.
+
+      TRACKED PAPERS (Look for NEW papers that CITE these):
+      ${trackedPapers.map(p => `- "${p}"`).join('\n')}
+
+      TRACKED AUTHORS (Look for NEW papers PUBLISHED by these individuals):
+      ${trackedAuthors.map(a => `- ${a}`).join('\n')}
+
+      INSTRUCTIONS:
+      1. Use Google Search to find forward citations for the papers and recent bibliographies for the authors.
+      2. Return a JSON array of discovered papers.
+      3. For each hit, specify WHY it was found (e.g. "Cites your tracked paper X" or "New from tracked author Y").
+      4. Format: [{ title, authors, year, abstract, reason, source, url }]
+      
+      Return ONLY valid JSON.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (error) {
+      console.error("Radar Update Error:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Generates a conceptual quiz of 10 multiple-choice questions.
+   */
+  async generateQuiz(title: string, abstract: string) {
+    const ai = getAI();
+    const prompt = `Generate a conceptual quiz of exactly 10 multiple-choice questions based on this research paper. 
+    Focus on core concepts, methodology, and significant results rather than minor details or exact numbers.
+    Each question must have exactly 4 options.
+    
+    Paper Title: ${title}
+    Abstract: ${abstract}
+    
+    Return the response ONLY as a JSON array of objects, where each object has:
+    - question: string
+    - options: string[] (exactly 4 strings)
+    - correctIndex: number (0-3)
+    
+    Do not use markdown blocks or preamble.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                question: { type: Type.STRING },
+                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                correctIndex: { type: Type.NUMBER }
+              },
+              required: ["question", "options", "correctIndex"]
+            }
+          }
+        }
+      });
+      const text = response.text || '[]';
+      return JSON.parse(text);
+    } catch (error) {
+      console.error("Generate Quiz Error:", error);
+      return [];
+    }
+  },
+
+  /**
    * Recommends articles based on user's past ratings and AI config
    */
   async recommendArticles(ratedArticles: Article[], books: Book[], candidates: any[], aiConfig: AIConfig) {
@@ -81,22 +203,22 @@ export const geminiService = {
     INSTRUCTIONS:
     1. Perform a live Google Search for this individual's publications and topics.
     2. Return a JSON array of technical research topics.
-    3. Provide at most 15 specific, high-quality strings.`;
+    3. Provide at most 15 specific, high-quality strings.
+    
+    Return ONLY a JSON array.`;
 
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '[]');
+      
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Discover Interests Error:", error);
       return [];
@@ -116,31 +238,19 @@ export const geminiService = {
     - Pre-print servers (arXiv sections, MedRxiv, bioRxiv)
     - Top-tier Labs/Blogs (HuggingFace, DeepMind, OpenAI, Microsoft Research)
     
-    Return a JSON array of high-quality, verified sources.`;
+    Return a JSON array of high-quality, verified sources. Format: [{name, url, type, description}]`;
 
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING, description: "Name of the journal, conference or blog" },
-                url: { type: Type.STRING, description: "The direct RSS/Atom feed URL or the main alert page URL" },
-                type: { type: Type.STRING, description: "One of: Conference, Journal, Pre-print, Blog, Lab" },
-                description: { type: Type.STRING, description: "1-sentence on why this matches the research topics" }
-              },
-              required: ["name", "url", "type"]
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '[]');
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Discover Scientific Feeds Error:", error);
       return [];
@@ -158,26 +268,12 @@ export const geminiService = {
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                author: { type: Type.STRING },
-                rating: { type: Type.NUMBER },
-                price: { type: Type.STRING },
-                amazonUrl: { type: Type.STRING },
-                description: { type: Type.STRING }
-              },
-              required: ["title", "author", "amazonUrl"]
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '[]');
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Amazon Search Error:", error);
       return [];
@@ -188,11 +284,11 @@ export const geminiService = {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
     
-    const prompt = `CRITICAL TASK: Use the googleSearch tool to access the official Google Scholar profile for: "${targetIdentity}". 
+    const prompt = `CRITICAL TASK: Access the official Google Scholar citations profile for: "${targetIdentity}". 
     
-    ${profiles.googleScholar ? `Direct URL provided: ${profiles.googleScholar}. PLEASE VISIT THIS URL TO EXTRACT DATA.` : ''}
+    IMPORTANT: Use the googleSearch tool to visit the profile. If provided a URL, visit it specifically.
     
-    If you find a match, extract a list of their published research papers.
+    Extract a list of published research papers.
     For each paper, extract:
     - title: Full title.
     - authors: Array of authors.
@@ -202,35 +298,23 @@ export const geminiService = {
     - scholarUrl: Direct Google Scholar URL.
     - tags: 2-3 keywords.
 
-    Return the result ONLY as a JSON array. Return [] if none found.`;
+    Return the final result ONLY as a JSON array of objects. Do not include markdown formatting like \`\`\`json.`;
 
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                authors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                abstract: { type: Type.STRING },
-                year: { type: Type.STRING },
-                citationCount: { type: Type.INTEGER },
-                scholarUrl: { type: Type.STRING },
-                tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-              },
-              required: ["title", "authors", "year"]
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      const result = JSON.parse(response.text || '[]');
-      return result;
+      
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      const cleanedJson = jsonMatch ? jsonMatch[0] : text;
+      
+      const result = JSON.parse(cleanedJson);
+      return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error("Fetch Scholar Articles Error:", error);
       throw error;
@@ -252,31 +336,12 @@ export const geminiService = {
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              nodes: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    name: { type: Type.STRING },
-                    type: { type: Type.STRING },
-                    cluster: { type: Type.STRING },
-                    level: { type: Type.INTEGER }
-                  }
-                }
-              },
-              links: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { source: { type: Type.STRING }, target: { type: Type.STRING } } } },
-              clusters: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, color: { type: Type.STRING } } } }
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '{}');
+      const text = response.text || '{}';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Discover Author Network Error:", error);
       return null;
@@ -292,18 +357,50 @@ export const geminiService = {
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '[]');
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Discover References Error:", error);
       return [];
+    }
+  },
+
+  /**
+   * Hydrates a single citation string into a full Article object.
+   */
+  async fetchArticleDetails(citation: string): Promise<Partial<Article> | null> {
+    const ai = getAI();
+    const prompt = `Search for the full academic metadata of the following cited paper: "${citation}".
+    
+    Return a JSON object with:
+    - title: Full paper title
+    - authors: Array of authors
+    - abstract: Brief 3-4 sentence abstract
+    - year: 4-digit year
+    - citationCount: integer estimate
+    - pdfUrl: Link to a PDF if publicly available (arXiv, etc)
+    - tags: 2-3 technical keywords
+    
+    Return ONLY JSON.`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: prompt,
+        config: {
+          tools: [{ googleSearch: {} }]
+        }
+      });
+      const text = response.text || '{}';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+    } catch (error) {
+      console.error("Fetch Article Details Error:", error);
+      return null;
     }
   },
 
@@ -314,6 +411,22 @@ export const geminiService = {
       contents: `Summarize this scientific article in 3 bullet points for a senior researcher: \nTitle: ${title}\nAbstract: ${abstract}`,
     });
     return response.text;
+  },
+
+  async reviewAsReviewer2(title: string, abstract: string, customPrompt: string) {
+    const ai = getAI();
+    const finalPrompt = `${customPrompt}\n\nTitle: ${title}\nAbstract: ${abstract}`;
+    
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: finalPrompt,
+      });
+      return response.text;
+    } catch (error) {
+      console.error("Reviewer 2 Error:", error);
+      return "Unable to summon Reviewer 2 at this time. Perhaps they are busy rejecting another paper.";
+    }
   },
 
   async critiqueArticle(title: string, abstract: string) {
@@ -392,20 +505,12 @@ export const geminiService = {
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              sentiment: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              citationCount: { type: Type.INTEGER },
-              citedByUrl: { type: Type.STRING }
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      const result = JSON.parse(response.text || '{}');
+      const text = response.text || '{}';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const result = JSON.parse(jsonMatch ? jsonMatch[0] : text);
       return {
         sentiment: (result.sentiment as Sentiment) || 'Unknown',
         summary: result.summary || 'Analysis complete.',
@@ -428,27 +533,12 @@ export const geminiService = {
         model: 'gemini-3-pro-image-preview',
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                authors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                year: { type: Type.STRING },
-                source: { type: Type.STRING },
-                citationCount: { type: Type.INTEGER },
-                snippet: { type: Type.STRING },
-                heatScore: { type: Type.INTEGER },
-                scholarUrl: { type: Type.STRING }
-              }
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
-      return JSON.parse(response.text || '[]');
+      const text = response.text || '[]';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
     } catch (error) {
       console.error("Trending Research Error:", error);
       return [];

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -33,6 +34,17 @@
         }
         .sync-orbit {
           animation: orbit 2s linear infinite;
+        }
+        
+        @keyframes detective-sonar {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.4); }
+          70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(129, 140, 248, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(129, 140, 248, 0); }
+        }
+        .detective-pulse {
+          display: inline-block;
+          animation: detective-sonar 2s infinite;
+          border-radius: 50%;
         }
     </style>
 <script type="importmap">

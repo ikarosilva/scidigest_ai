@@ -25,6 +25,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     onUpdateAIConfig({ ...aiConfig, recommendationBias: bias });
   };
 
+  const handleReviewerPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onUpdateAIConfig({ ...aiConfig, reviewer2Prompt: e.target.value });
+  };
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
@@ -83,6 +87,29 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
               {aiConfig.recommendationBias === 'experimental' && "Gemini will actively seek out high-uncertainty, high-novelty articles that could expand your research horizons."}
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Reviewer 2 Persona Config */}
+      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+        <h3 className="text-xl font-bold text-slate-200 mb-6 flex items-center gap-2">
+          <span>👿</span> Reviewer 2 Persona
+        </h3>
+        <p className="text-sm text-slate-400 mb-8">
+          Configure the critical bias and persona for the "Reviewer 2" tool in the Reader.
+        </p>
+
+        <div className="space-y-4">
+           <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">Custom Rejection Prompt</label>
+           <textarea 
+             value={aiConfig.reviewer2Prompt}
+             onChange={handleReviewerPromptChange}
+             className="w-full h-32 bg-slate-950 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 outline-none focus:ring-1 focus:ring-red-500 transition-all font-mono leading-relaxed"
+             placeholder="Define Reviewer 2's harshness level..."
+           />
+           <p className="text-[10px] text-slate-500 italic">
+             This prompt is sent alongside the article title and abstract when you "Summon Reviewer 2" in the Reader panel.
+           </p>
         </div>
       </section>
 

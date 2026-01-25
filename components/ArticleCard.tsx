@@ -31,6 +31,10 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
   };
 
+  const toggleTracking = () => {
+    onUpdate(article.id, { isTracked: !article.isTracked });
+  };
+
   const toggleShelf = (shelfId: string) => {
     const isCurrentlyIn = article.shelfIds?.includes(shelfId);
     let newShelfIds = article.shelfIds || [];
@@ -60,6 +64,13 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
             <span className="bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-1 rounded">
               {article.year}
             </span>
+            <button 
+              onClick={toggleTracking}
+              className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border transition-all ${article.isTracked ? 'bg-indigo-600 border-indigo-400 text-white' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-indigo-400'}`}
+              title="Track forward citations for this paper"
+            >
+              {article.isTracked ? '📡 Tracked' : '📡 Track'}
+            </button>
           </div>
           <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${sentimentColors[article.userReviews.sentiment]}`}>
             {article.userReviews.sentiment} Reception

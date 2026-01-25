@@ -6,7 +6,7 @@ const INTERESTS_KEY = 'scidigest_interests_v1';
 const FEEDS_KEY = 'scidigest_feeds_v1';
 const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
@@ -30,7 +30,8 @@ const DEFAULT_INTERESTS = [
 ];
 
 const DEFAULT_AI_CONFIG: AIConfig = {
-  recommendationBias: 'balanced'
+  recommendationBias: 'balanced',
+  reviewer2Prompt: 'Review this paper as a journal Reviewer 2. Provide criticism on methods, weak or hidden assumptions, logical/mathematical/reasoning mistakes. Identify meaningless or over citations as well as incorrect interpretation of previous works. Point out any biases. If appropriate, be dismissive of results.'
 };
 
 const DEFAULT_FEEDS: Feed[] = [
@@ -72,7 +73,8 @@ export const dbService = {
       version: APP_VERSION,
       aiConfig: DEFAULT_AI_CONFIG,
       totalReadTime: 0,
-      socialProfiles: {}
+      socialProfiles: {},
+      trackedAuthors: []
     };
     const parsed = JSON.parse(data) as AppState;
     
@@ -81,6 +83,13 @@ export const dbService = {
       parsed.shelves = [DEFAULT_QUEUE_SHELF];
     }
     
+    if (!parsed.trackedAuthors) {
+      parsed.trackedAuthors = [];
+      if (parsed.socialProfiles?.name) {
+        parsed.trackedAuthors.push(parsed.socialProfiles.name);
+      }
+    }
+
     parsed.articles = parsed.articles.map((a: any) => {
       // Migrate isInQueue to shelfIds
       if (a.isInQueue && (!a.shelfIds || a.shelfIds.length === 0)) {
@@ -109,7 +118,25 @@ export const dbService = {
   },
   saveSocialProfiles: (profiles: SocialProfiles) => {
     const data = dbService.getData();
+    const oldName = data.socialProfiles.name;
     data.socialProfiles = profiles;
+    
+    // Automatically track user as author
+    if (profiles.name && profiles.name !== oldName) {
+      if (!data.trackedAuthors.includes(profiles.name)) {
+        data.trackedAuthors.push(profiles.name);
+      }
+      // Clean up old name if it was only there for auto-tracking
+      if (oldName && data.trackedAuthors.includes(oldName)) {
+        data.trackedAuthors = data.trackedAuthors.filter(a => a !== oldName);
+      }
+    }
+    
+    dbService.saveData(data);
+  },
+  updateTrackedAuthors: (authors: string[]) => {
+    const data = dbService.getData();
+    data.trackedAuthors = authors;
     dbService.saveData(data);
   },
   getFeeds: (): Feed[] => {

@@ -15,6 +15,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
       label: 'Discovery',
       items: [
         { id: 'feed', label: 'AI Recommends', icon: '✨' },
+        { id: 'tracker', label: 'Tracker', icon: '🕵️' },
         { id: 'trending', label: 'Trending', icon: '🔥' },
       ]
     },
@@ -30,7 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     {
       label: 'Insights',
       items: [
-        { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+        { id: 'academy', label: 'Academy', icon: '🎓' },
         { id: 'networks', label: 'Networks', icon: '🕸️' },
       ]
     },
@@ -41,6 +42,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
         { id: 'feeds', label: 'Feeds', icon: '📡' },
         { id: 'portability', label: 'Data & Privacy', icon: '💾' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
+      ]
+    },
+    {
+      label: 'Help',
+      items: [
+        { id: 'version', label: 'App Version', icon: '🏷️' },
+        { id: 'feedback', label: 'Submit Issues', icon: '🐞' },
       ]
     }
   ];
@@ -59,6 +67,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     'syncing': 'Syncing...',
     'error': 'Sync Error',
     'update-available': 'Update Found'
+  };
+
+  const handleTabClick = (tabId: string) => {
+    if (tabId === 'feedback') {
+      onOpenFeedback();
+    } else {
+      setTab(tabId);
+    }
   };
 
   return (
@@ -83,30 +99,20 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
             {group.items.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setTab(tab.id)}
+                onClick={() => handleTabClick(tab.id)}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
                   currentTab === tab.id
                     ? 'bg-indigo-500/10 text-indigo-400 font-medium'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
-                <span className="text-lg">{tab.icon}</span>
+                <span className={`text-lg ${tab.id === 'tracker' ? 'detective-pulse' : ''}`}>{tab.icon}</span>
                 <span className="text-sm font-semibold">{tab.label}</span>
               </button>
             ))}
           </div>
         ))}
       </nav>
-
-      <div className="px-4 mb-2">
-        <button 
-          onClick={onOpenFeedback}
-          className="w-full flex items-center gap-3 px-4 py-2 rounded-xl transition-all text-slate-500 hover:bg-slate-800 hover:text-orange-400 border border-transparent hover:border-orange-500/10"
-        >
-          <span className="text-lg">🐞</span>
-          <span className="text-xs font-semibold">Submit Issues</span>
-        </button>
-      </div>
 
       <div className="p-4 border-t border-slate-800">
         <div className="bg-slate-950 rounded-2xl p-3 space-y-2">

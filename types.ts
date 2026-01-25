@@ -17,8 +17,13 @@ export type SyncStatus = 'disconnected' | 'synced' | 'syncing' | 'error' | 'upda
 
 export type RecommendationBias = 'conservative' | 'balanced' | 'experimental';
 
+export type QuizStatus = 'not-taken' | 'pass' | 'fail';
+
+export type ReadingMode = 'default' | 'paper' | 'night';
+
 export interface AIConfig {
   recommendationBias: RecommendationBias;
+  reviewer2Prompt: string;
 }
 
 export interface UserReviews {
@@ -81,6 +86,8 @@ export interface Article {
   userReadTime: number; // In seconds
   estimatedReadTime?: number; // In minutes
   shelfIds: string[]; // Replaces isInQueue
+  quizStatus?: QuizStatus;
+  isTracked?: boolean; // New: Tracking forward citations
 }
 
 export interface Book {
@@ -107,6 +114,7 @@ export interface AppState {
   aiConfig: AIConfig;
   totalReadTime: number;
   socialProfiles: SocialProfiles;
+  trackedAuthors: string[]; // New: List of authors to monitor
 }
 
 export type NetworkViewMode = 'notes' | 'articles' | 'topics' | 'unified' | 'datasets' | 'author';
