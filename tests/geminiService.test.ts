@@ -22,7 +22,8 @@ describe('geminiService', () => {
       { id: '1', title: 'Paper 1', snippet: 'A' },
       { id: '2', title: 'Paper 2', snippet: 'B' }
     ];
-    const aiConfig = { recommendationBias: 'balanced' as const, reviewer2Prompt: '', feedbackUrl: '' };
+    // Added monthlyTokenLimit to AIConfig to satisfy type requirements
+    const aiConfig = { recommendationBias: 'balanced' as const, reviewer2Prompt: '', feedbackUrl: '', monthlyTokenLimit: 1000000 };
     
     const rankings = await geminiService.recommendArticles([], [], candidates, aiConfig);
     expect(Array.isArray(rankings)).toBe(true);

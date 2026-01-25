@@ -24,10 +24,23 @@ export interface LogEntry {
   message: string;
 }
 
+export interface GeminiUsageEvent {
+  id: string;
+  timestamp: string;
+  feature: string;
+  model: string;
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  success: boolean;
+}
+
 export interface AIConfig {
   recommendationBias: RecommendationBias;
   reviewer2Prompt: string;
   feedbackUrl: string;
+  monthlyTokenLimit: number;
 }
 
 export interface UserReviews {
@@ -122,6 +135,7 @@ export interface AppState {
   socialProfiles: SocialProfiles;
   trackedAuthors: string[];
   logs: LogEntry[];
+  usageHistory: GeminiUsageEvent[];
 }
 
 export type NetworkViewMode = 'notes' | 'articles' | 'topics' | 'unified' | 'datasets' | 'author';

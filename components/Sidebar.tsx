@@ -40,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
       items: [
         { id: 'topics', label: 'Topics', icon: '🎯' },
         { id: 'feeds', label: 'Feeds', icon: '📡' },
+        { id: 'telemetry', label: 'Usage & Cost', icon: '📊' },
         { id: 'portability', label: 'Data & Privacy', icon: '💾' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
       ]

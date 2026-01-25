@@ -13,6 +13,7 @@ import NotesSection from './components/NotesSection';
 import SettingsSection from './components/SettingsSection';
 import NetworkGraph from './components/NetworkGraph';
 import Reader from './components/Reader';
+import TelemetrySection from './components/TelemetrySection';
 import FeedbackModal from './components/FeedbackModal';
 import SynthesisModal from './components/SynthesisModal';
 import InterestsManager from './components/InterestsManager';
@@ -171,7 +172,6 @@ const App: React.FC = () => {
           const newBooks: Book[] = rawBooks
             .filter(b => b && b.book && b.read_status === 'read')
             .map(b => {
-              // Inference: Find the interest that matches the book title most specifically (longest match)
               const matchedTopics = userInterests.filter(interest => 
                 b.book.toLowerCase().includes(interest.toLowerCase())
               ).sort((x, y) => y.length - x.length);
@@ -188,7 +188,6 @@ const App: React.FC = () => {
                 tags: [...matchedTopics, 'GoodReads Import']
               };
             })
-            // Only include books that match at least one of your trajectories
             .filter(b => b.tags.some(tag => userInterests.includes(tag)))
             .filter(b => !existingTitles.has(b.title.toLowerCase().trim()));
 
@@ -265,7 +264,6 @@ const App: React.FC = () => {
     input.click();
   };
 
-  // CHANGED: Immersive styling for the reader mode
   const mainPadding = currentTab === 'reader' ? 'p-0' : 'p-8';
   const contentWidth = currentTab === 'reader' ? 'max-w-none' : 'max-w-6xl mx-auto pb-20';
 
@@ -487,6 +485,12 @@ const App: React.FC = () => {
             />
           )}
 
+          {currentTab === 'telemetry' && (
+            <TelemetrySection 
+              aiConfig={aiConfig}
+            />
+          )}
+
           {currentTab === 'settings' && (
             <SettingsSection 
               aiConfig={aiConfig} 
@@ -534,5 +538,4 @@ const App: React.FC = () => {
   );
 };
 
-// Add missing default export
 export default App;

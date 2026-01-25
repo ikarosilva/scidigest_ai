@@ -1,4 +1,5 @@
-import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf, LogEntry } from '../types';
+
+import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf, LogEntry, GeminiUsageEvent } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
 const INTERESTS_KEY = 'scidigest_interests_v1';
@@ -9,6 +10,7 @@ export const APP_VERSION = '1.5.1';
 export const RELEASE_DATE = 'May 26, 2024';
 
 const MAX_LOG_ENTRIES = 50;
+const MAX_USAGE_ENTRIES = 200;
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
@@ -33,8 +35,9 @@ const DEFAULT_INTERESTS = [
 
 const DEFAULT_AI_CONFIG: AIConfig = {
   recommendationBias: 'balanced',
-  feedbackUrl: 'https://github.com/your-username/your-repo/issues/new', // Updated placeholder
-  reviewer2Prompt: 'Review this paper as a journal Reviewer 2. Provide criticism on methods, weak or hidden assumptions, logical/mathematical/reasoning mistakes. Identify meaningless or over citations as well as incorrect interpretation of previous works. Point out any biases. If appropriate, be dismissive of results.'
+  feedbackUrl: 'https://github.com/your-username/your-repo/issues/new',
+  reviewer2Prompt: 'Review this paper as a journal Reviewer 2. Provide criticism on methods, weak or hidden assumptions, logical/mathematical/reasoning mistakes. Identify meaningless or over citations as well as incorrect interpretation of previous works. Point out any biases. If appropriate, be dismissive of results.',
+  monthlyTokenLimit: 1000000 // 1M tokens default
 };
 
 const DEFAULT_FEEDS: Feed[] = [
@@ -60,8 +63,7 @@ export const dbService = {
   getAIConfig: (): AIConfig => {
     const stored = localStorage.getItem(AI_CONFIG_KEY);
     const parsed = stored ? JSON.parse(stored) : DEFAULT_AI_CONFIG;
-    // Migration for new fields
-    if (!parsed.feedbackUrl) parsed.feedbackUrl = DEFAULT_AI_CONFIG.feedbackUrl;
+    if (!parsed.monthlyTokenLimit) parsed.monthlyTokenLimit = DEFAULT_AI_CONFIG.monthlyTokenLimit;
     return parsed;
   },
   saveAIConfig: (config: AIConfig) => {
@@ -81,56 +83,59 @@ export const dbService = {
       totalReadTime: 0,
       socialProfiles: {},
       trackedAuthors: [],
-      logs: []
+      logs: [],
+      usageHistory: []
     };
     const parsed = JSON.parse(data) as AppState;
     
-    // Migration & Circular Buffer Version Reset
     if (parsed.version !== APP_VERSION) {
-      parsed.logs = []; // Erase buffer when version updates
       parsed.version = APP_VERSION;
     }
 
     if (!parsed.logs) parsed.logs = [];
-
-    if (!parsed.shelves || parsed.shelves.length === 0) {
-      parsed.shelves = [DEFAULT_QUEUE_SHELF];
-    }
+    if (!parsed.usageHistory) parsed.usageHistory = [];
+    if (!parsed.shelves || parsed.shelves.length === 0) parsed.shelves = [DEFAULT_QUEUE_SHELF];
     
     if (!parsed.trackedAuthors) {
       parsed.trackedAuthors = [];
-      if (parsed.socialProfiles?.name) {
-        parsed.trackedAuthors.push(parsed.socialProfiles.name);
-      }
+      if (parsed.socialProfiles?.name) parsed.trackedAuthors.push(parsed.socialProfiles.name);
     }
 
-    parsed.articles = (parsed.articles || []).map((a: any) => {
-      // Migrate isInQueue to shelfIds
-      if (a.isInQueue && (!a.shelfIds || a.shelfIds.length === 0)) {
-        return { ...a, shelfIds: ['default-queue'], userReadTime: a.userReadTime || 0 };
-      }
-      return { ...a, shelfIds: a.shelfIds || [], userReadTime: a.userReadTime || 0 };
-    });
+    parsed.articles = (parsed.articles || []).map((a: any) => ({
+      ...a,
+      shelfIds: a.shelfIds || (a.isInQueue ? ['default-queue'] : []),
+      userReadTime: a.userReadTime || 0
+    }));
 
-    parsed.books = (parsed.books || []).map((b: any) => {
-      if (b.isInQueue && (!b.shelfIds || b.shelfIds.length === 0)) {
-        return { ...b, shelfIds: ['default-queue'] };
-      }
-      return { ...b, shelfIds: b.shelfIds || [] };
-    });
+    parsed.books = (parsed.books || []).map((b: any) => ({
+      ...b,
+      shelfIds: b.shelfIds || (b.isInQueue ? ['default-queue'] : [])
+    }));
 
-    parsed.lastModified = parsed.lastModified || new Date().toISOString();
-    parsed.aiConfig = parsed.aiConfig || dbService.getAIConfig();
-    parsed.totalReadTime = parsed.totalReadTime || 0;
-    parsed.socialProfiles = parsed.socialProfiles || {};
-    
     return parsed;
   },
   saveData: (data: AppState) => {
     data.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    // Dispatch event so App state and other components can refresh
     window.dispatchEvent(new CustomEvent('db-update'));
+  },
+  trackUsage: (event: GeminiUsageEvent) => {
+    const data = dbService.getData();
+    data.usageHistory = [event, ...(data.usageHistory || [])].slice(0, MAX_USAGE_ENTRIES);
+    dbService.saveData(data);
+  },
+  getUsageStats: () => {
+    const data = dbService.getData();
+    const history = data.usageHistory || [];
+    const totalTokens = history.reduce((acc, curr) => acc + curr.totalTokens, 0);
+    const avgLatency = history.length ? history.reduce((acc, curr) => acc + curr.latencyMs, 0) / history.length : 0;
+    
+    const byFeature: Record<string, number> = {};
+    history.forEach(h => {
+      byFeature[h.feature] = (byFeature[h.feature] || 0) + h.totalTokens;
+    });
+
+    return { totalTokens, avgLatency, byFeature };
   },
   addLog: (type: 'error' | 'warning' | 'info', message: string) => {
     const data = dbService.getData();
@@ -140,7 +145,6 @@ export const dbService = {
       date: new Date().toISOString(),
       message
     };
-    // Circular buffer logic: Prepend new and slice to limit
     data.logs = [newEntry, ...(data.logs || [])].slice(0, MAX_LOG_ENTRIES);
     dbService.saveData(data);
   },
@@ -151,20 +155,7 @@ export const dbService = {
   },
   saveSocialProfiles: (profiles: SocialProfiles) => {
     const data = dbService.getData();
-    const oldName = data.socialProfiles.name;
     data.socialProfiles = profiles;
-    
-    // Automatically track user as author
-    if (profiles.name && profiles.name !== oldName) {
-      if (!data.trackedAuthors.includes(profiles.name)) {
-        data.trackedAuthors.push(profiles.name);
-      }
-      // Clean up old name if it was only there for auto-tracking
-      if (oldName && data.trackedAuthors.includes(oldName)) {
-        data.trackedAuthors = data.trackedAuthors.filter(a => a !== oldName);
-      }
-    }
-    
     dbService.saveData(data);
   },
   updateTrackedAuthors: (authors: string[]) => {
@@ -308,13 +299,12 @@ export const dbService = {
   importFullBackup: (jsonString: string): { success: boolean, upgraded: boolean } => {
     try {
       const parsed = JSON.parse(jsonString);
-      let upgraded = false;
       if (parsed.data && parsed.interests) {
         dbService.saveData(parsed.data);
         dbService.saveInterests(parsed.interests);
         if (parsed.feeds) dbService.saveFeeds(parsed.feeds);
         if (parsed.aiConfig) dbService.saveAIConfig(parsed.aiConfig);
-        return { success: true, upgraded };
+        return { success: true, upgraded: false };
       }
       return { success: false, upgraded: false };
     } catch (e) {
@@ -323,13 +313,7 @@ export const dbService = {
     }
   },
   factoryReset: () => {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(INTERESTS_KEY);
-    localStorage.removeItem(FEEDS_KEY);
-    localStorage.removeItem(AI_CONFIG_KEY);
-    localStorage.removeItem(SYNC_KEY_STORAGE);
-    localStorage.removeItem('scidigest_google_token');
-    localStorage.removeItem('scidigest_simulated_sync');
+    localStorage.clear();
     window.location.reload();
   }
 };

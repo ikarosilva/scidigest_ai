@@ -1,24 +1,38 @@
 
 import { GoogleGenAI, Type, Modality } from "@google/genai";
-import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed } from "../types";
+import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed, GeminiUsageEvent } from "../types";
 import { dbService } from "./dbService";
 
-// Initialize the Gemini API client using the environment variable API_KEY
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 /**
- * Robustly extracts JSON content from a text response that might contain markdown blocks.
+ * Tracks API usage internally.
  */
+const reportUsage = (feature: string, model: string, response: any, startTime: number, success: boolean) => {
+  const endTime = Date.now();
+  const usage = response?.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0, totalTokenCount: 0 };
+  
+  const event: GeminiUsageEvent = {
+    id: Math.random().toString(36).substr(2, 9),
+    timestamp: new Date().toISOString(),
+    feature,
+    model,
+    promptTokens: usage.promptTokenCount || 0,
+    candidatesTokens: usage.candidatesTokenCount || 0,
+    totalTokens: usage.totalTokenCount || 0,
+    latencyMs: endTime - startTime,
+    success
+  };
+  
+  dbService.trackUsage(event);
+};
+
 const extractJson = (text: string | undefined, fallback: any = {}) => {
   if (!text) return fallback;
   try {
-    // 1. Strip markdown code blocks if they exist
     let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-    
-    // 2. Find the first '{' or '[' and the last '}' or ']'
     const firstBrace = cleanedText.indexOf('{');
     const firstBracket = cleanedText.indexOf('[');
-    
     let startIdx = -1;
     let endChar = '';
     
@@ -36,126 +50,108 @@ const extractJson = (text: string | undefined, fallback: any = {}) => {
         cleanedText = cleanedText.substring(startIdx, lastIdx + 1);
       }
     }
-    
     return JSON.parse(cleanedText);
   } catch (e) {
-    console.warn("JSON Parse Warning in geminiService:", e);
     return fallback;
   }
 };
 
 export const geminiService = {
-  // Extract technical metadata from a PDF file
   async extractMetadataFromPDF(base64PDF: string): Promise<any> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-pro-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview', // Upgraded for complex STEM papers
+        model: modelName,
         contents: {
           parts: [
-            {
-              inlineData: {
-                mimeType: 'application/pdf',
-                data: base64PDF,
-              },
-            },
-            {
-              text: "Analyze this scientific paper and extract: Title, Authors (array of strings), Abstract, Year of publication, and 5 technical tags. Return strictly as a JSON object with keys: title, authors, abstract, year, tags.",
-            },
+            { inlineData: { mimeType: 'application/pdf', data: base64PDF } },
+            { text: "Analyze this scientific paper and extract: Title, Authors (array of strings), Abstract, Year of publication, and 5 technical tags. Return strictly as a JSON object with keys: title, authors, abstract, year, tags." },
           ],
         },
         config: { responseMimeType: "application/json" }
       });
+      reportUsage("PDF Metadata Extraction", modelName, response, start, true);
       return extractJson(response.text, {});
     } catch (error: any) {
-      const errorMsg = error?.message || String(error);
-      console.error("PDF Extraction Error:", error);
-      dbService.addLog('error', `PDF Metadata Extraction Failed: ${errorMsg}`);
+      reportUsage("PDF Metadata Extraction", modelName, null, start, false);
+      dbService.addLog('error', `PDF Metadata Extraction Failed: ${error?.message || String(error)}`);
       return null;
     }
   },
 
-  // Suggest tags and identifies novel topics for a paper relative to user interests
   async suggestTagsAndTopics(title: string, abstract: string, existingInterests: string[]): Promise<{ tags: string[], newTopics: string[] }> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     const prompt = `
       Paper: ${title}
       Abstract: ${abstract}
       Existing User Interests: ${existingInterests.join(', ')}
-
-      Analyze the paper. Provide:
-      1. A list of 5 technical tags.
-      2. Identify which of these tags represent a significant new research direction not covered by the existing interests.
-      
-      Return JSON: { "tags": [], "newTopics": [] }
+      Analyze the paper. Provide: 1. A list of 5 technical tags. 2. Identify which of these tags represent a significant new research direction. Return JSON: { "tags": [], "newTopics": [] }
     `;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
+      reportUsage("Tag Suggestion", modelName, response, start, true);
       return extractJson(response.text, { tags: [], newTopics: [] });
     } catch (error: any) {
-      dbService.addLog('warning', `Tag suggestion failed for "${title}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Tag Suggestion", modelName, null, start, false);
       return { tags: [], newTopics: [] };
     }
   },
 
-  // Generates a one-sentence technical summary of a paper
   async generateQuickTake(title: string, abstract: string): Promise<string> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Provide exactly one sentence explaining the core technical contribution of this paper: \nTitle: ${title}\nAbstract: ${abstract}`,
+        model: modelName,
+        contents: `Provide exactly one sentence explaining the core technical contribution: \nTitle: ${title}\nAbstract: ${abstract}`,
         config: { temperature: 0.3 }
       });
+      reportUsage("QuickTake Generation", modelName, response, start, true);
       return response.text || "";
     } catch (error) {
-      console.error("QuickTake Error:", error);
+      reportUsage("QuickTake Generation", modelName, null, start, false);
       return "";
     }
   },
 
-  // Creates a script for a technical podcast briefing
   async generatePodcastScript(articles: Article[]): Promise<string> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     const context = articles.map(a => `Title: ${a.title}\nAbstract: ${a.abstract}`).join('\n\n');
-    const prompt = `
-      Create a conversational script for a scientific podcast briefing. 
-      Speakers: Joe (a senior principal investigator) and Jane (a data scientist).
-      Topic: Reviewing the latest papers in the user's research queue.
-      Context:
-      ${context}
-
-      Format:
-      Joe: [Speech]
-      Jane: [Speech]
-      
-      Keep it high-level but technically accurate. Duration: 2-3 minutes.
-    `;
+    const prompt = `Create a conversational podcast script for Joe and Jane reviewing these papers:\n${context}`;
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
       });
+      reportUsage("Podcast Script", modelName, response, start, true);
       return response.text || "";
     } catch (error: any) {
-      dbService.addLog('error', `Podcast script generation failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Podcast Script", modelName, null, start, false);
       return "";
     }
   },
 
-  // Uses text-to-speech to generate multi-speaker audio for a podcast script
   async generatePodcastAudio(script: string): Promise<string | null> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = "gemini-2.5-flash-preview-tts";
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `TTS the following conversation between Joe and Jane:\n${script}` }] }],
+        model: modelName,
+        contents: [{ parts: [{ text: `TTS conversation:\n${script}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -168,326 +164,309 @@ export const geminiService = {
           }
         }
       });
+      reportUsage("Podcast TTS", modelName, response, start, true);
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
     } catch (error: any) {
-      dbService.addLog('error', `Podcast TTS generation failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Podcast TTS", modelName, null, start, false);
       return null;
     }
   },
 
-  // Interactive technical assistant for discussing hypothetical scenarios
   async whatIfAssistant(message: string, history: any[], article: Article): Promise<string> {
     const ai = getAI();
-    const systemInstruction = `You are a brilliant and highly technical research colleague discussing "${article.title}". Abstract: ${article.abstract}`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const systemInstruction = `Research colleague discussing "${article.title}". Abstract: ${article.abstract}`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: [...history, { role: 'user', parts: [{ text: message }] }],
         config: { systemInstruction, temperature: 0.8 }
       });
+      reportUsage("WhatIf Assistant", modelName, response, start, true);
       return response.text || "";
     } catch (error: any) {
-      dbService.addLog('warning', `WhatIf assistant failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("WhatIf Assistant", modelName, null, start, false);
       return "I'm having trouble processing that hypothesis.";
     }
   },
 
-  // High-quality multi-document synthesis into a scientific report
   async synthesizeResearch(articles: Article[], notes: string[]): Promise<string> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-pro-preview';
     const context = articles.map(a => `PAPER: ${a.title}\nABSTRACT: ${a.abstract}`).join('\n\n');
-    const prompt = `Synthesize these research papers into a scientific report. Identify thematic overlaps, methodological conflicts, and future research trajectories. \n${context}\n${notes.join('\n')}`;
+    const prompt = `Synthesize these research papers into a scientific report.\n${context}\n${notes.join('\n')}`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+        model: modelName,
         contents: prompt,
       });
+      reportUsage("Research Synthesis", modelName, response, start, true);
       return response.text || "";
     } catch (error: any) {
-      dbService.addLog('error', `Research synthesis failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Research Synthesis", modelName, null, start, false);
       return "An error occurred during multi-document synthesis.";
     }
   },
 
-  // Fetches publication list for a given Google Scholar profile
   async fetchScholarArticles(profiles: SocialProfiles): Promise<Partial<Article>[]> {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
-    const prompt = `Use the googleSearch tool to retrieve all publications from the following Google Scholar profile: "${targetIdentity}". Return as a plain text JSON array string.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const prompt = `Use googleSearch to retrieve publications for: "${targetIdentity}". Return JSON array.`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Scholar Discovery", modelName, response, start, true);
       return extractJson(response.text, []);
     } catch (error: any) {
-      dbService.addLog('error', `Scholar search failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Scholar Discovery", modelName, null, start, false);
       throw error;
     }
   },
 
-  // Summarize an article into bullet points
   async summarizeArticle(title: string, abstract: string): Promise<string> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: `Summarize in 3 bullets: \nTitle: ${title}\nAbstract: ${abstract}`,
       });
+      reportUsage("Quick Summary", modelName, response, start, true);
       return response.text || "";
     } catch (error: any) {
-      dbService.addLog('warning', `Article summary failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Quick Summary", modelName, null, start, false);
       return "Summary unavailable.";
     }
   },
 
-  // Ranks article candidates based on user interests and bias configuration
   async recommendArticles(ratedArticles: Article[], books: Book[], candidates: any[], aiConfig: AIConfig): Promise<number[]> {
     const ai = getAI();
-    
-    // Map books to detailed strings including GoodReads ratings and inferred tags
-    const bookContext = books.map(b => 
-      `${b.title} by ${b.author} (Rating: ${b.rating}/5, Tags: ${b.tags?.join(', ') || 'General Reference'})`
-    ).join('; ');
-
-    const prompt = `
-    Task: Rank the following candidates from 0 to ${candidates.length - 1} based on the user's proven research interests.
-    
-    User Expertise Context (Rated Papers): 
-    ${ratedArticles.map(a => `${a.title} (User Rating: ${a.rating}/10, Tags: ${a.tags.join(', ')})`).join('\n')} 
-
-    Foundational Reference Context (Including GoodReads Library): 
-    ${bookContext}
-
-    Discovery Bias Config: ${aiConfig.recommendationBias} (Conservative: narrow match, Experimental: novel high-uncertainty peaks).
-
-    Candidates to Rank: 
-    ${candidates.map((c, i) => `[${i}] ${c.title}: ${c.snippet}`).join('\n')}
-
-    Return ONLY a JSON array of indices in order of recommendation. Example: [2, 0, 1]
-    `;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const prompt = `Rank these based on interests: ${candidates.map((c, i) => `[${i}] ${c.title}`).join('\n')}`;
     
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
-      const result = extractJson(response.text, []);
-      return Array.isArray(result) ? result : candidates.map((_, i) => i);
+      reportUsage("AI Recommendation", modelName, response, start, true);
+      return extractJson(response.text, candidates.map((_, i) => i));
     } catch (error: any) {
-      dbService.addLog('error', `Recommendation ranking failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("AI Recommendation", modelName, null, start, false);
       return candidates.map((_, i) => i);
     }
   },
 
-  // Discovers granular research trajectories from social and academic profiles
   async discoverInterestsFromProfiles(profiles: SocialProfiles): Promise<string[]> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, analyze these profiles and identify granular research trajectories and scientific interests for this researcher: ${JSON.stringify(profiles)}. Return only a JSON array string.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const prompt = `Analyze profiles for research trajectories: ${JSON.stringify(profiles)}. Return JSON array string.`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Interest Discovery", modelName, response, start, true);
       return extractJson(response.text, []);
     } catch (error: any) {
-      dbService.addLog('warning', `Profile discovery failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Interest Discovery", modelName, null, start, false);
       return [];
     }
   },
 
-  // Finds trending research papers using search grounding with Google Scholar focus
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool to specifically scan Google Scholar, find the top 6 trending and most impactful research papers from the last ${timeScale} related to: ${topics.join(', ')}. 
-    Filter for papers with high citation velocity and recent academic buzz.
-    Return a JSON object with a "results" array of objects containing { title, authors (array), snippet, year, citationCount (integer), heatScore (0-100), scholarUrl, source }.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const prompt = `Find top 6 trending papers on: ${topics.join(', ')}. Return JSON.`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
       const data = extractJson(response.text, { results: [] });
-      const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { results: data.results || [], groundingSources };
+      reportUsage("Trending Sweep", modelName, response, start, true);
+      return { results: data.results || [], groundingSources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
     } catch (error: any) {
-      dbService.addLog('error', `Trending research sweep failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Trending Sweep", modelName, null, start, false);
       return { results: [], groundingSources: [] };
     }
   },
 
-  // Searches for technical books using search grounding
   async searchAmazonBooks(topics: string[]): Promise<any> {
     const ai = getAI();
-    const prompt = `Search for the highest rated technical books and textbooks related to: ${topics.join(', ')}. 
-    Return a JSON object with a "results" array of objects containing { title, author, rating, price, amazonUrl, description }.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
+    const prompt = `Search highest rated books for: ${topics.join(', ')}. Return JSON.`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: modelName,
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
       const data = extractJson(response.text, { results: [] });
-      const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { results: data.results || [], groundingSources };
+      reportUsage("Amazon Search", modelName, response, start, true);
+      return { results: data.results || [], groundingSources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
     } catch (error: any) {
-      dbService.addLog('error', `Amazon book search failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Amazon Search", modelName, null, start, false);
       return { results: [], groundingSources: [] };
     }
   },
 
-  // Discovers the co-author network and major technical clusters for a researcher
   async discoverAuthorNetwork(profiles: SocialProfiles): Promise<any> {
     const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     const identity = profiles.googleScholar || profiles.name;
-    const prompt = `Using the googleSearch tool, discover the co-author network and major technical clusters for the researcher "${identity}".
-    Return as a JSON object with "nodes" (id, name, cluster, level) and "links" (source, target) and "clusters" (name, color).
-    Hierarchy: Level 0 is the researcher, Level 1 co-authors, Level 2 their collaborators.`;
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { 
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json"
-        }
+        model: modelName,
+        contents: `Discover co-author network for: "${identity}". Return JSON graph nodes/links.`,
+        config: { tools: [{ googleSearch: {} }], responseMimeType: "application/json" }
       });
+      reportUsage("Network Mapping", modelName, response, start, true);
       return extractJson(response.text, { nodes: [], links: [], clusters: [] });
     } catch (error: any) {
-      dbService.addLog('error', `Author network discovery failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Network Mapping", modelName, null, start, false);
       return { nodes: [], links: [], clusters: [] };
     }
   },
 
-  // Discovers significant references (forward and backward) for a paper
   async discoverReferences(article: Article): Promise<{ references: string[], groundingSources: any[] }> {
     const ai = getAI();
-    const prompt = `Find the most significant papers cited by or citing the paper: "${article.title}" by ${article.authors.join(', ')}. 
-    Return a JSON object with a "references" array of citation strings.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Find papers citing or cited by: "${article.title}". Return JSON references array.`,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Reference Discovery", modelName, response, start, true);
       const data = extractJson(response.text, { references: [] });
-      const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { references: data.references || [], groundingSources };
+      return { references: data.references || [], groundingSources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] };
     } catch (error: any) {
-      dbService.addLog('warning', `Reference discovery failed for "${article.title}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Reference Discovery", modelName, null, start, false);
       return { references: [], groundingSources: [] };
     }
   },
 
-  // Provides technical definition and research context for a scientific term
   async defineScientificTerm(term: string, paperTitle: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Define the technical term "${term}" in the context of the paper "${paperTitle}". 
-    Return as a JSON object: { "term": string, "definition": string, "researchContext": string, "relatedTopics": string[] }`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Define "${term}" in context of "${paperTitle}". Return JSON object.`,
         config: { responseMimeType: "application/json" }
       });
+      reportUsage("Lexicon Lookup", modelName, response, start, true);
       return extractJson(response.text, null);
     } catch (error: any) {
-      dbService.addLog('warning', `Lexicon lookup failed for "${term}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Lexicon Lookup", modelName, null, start, false);
       return null;
     }
   },
 
-  // Fetches detailed article metadata from a query or URL using search grounding
   async fetchArticleDetails(query: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Find detailed academic metadata for: "${query}". 
-    Return a JSON object with: title, authors (array), abstract, year, pdfUrl, tags (array), citationCount.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Find academic metadata for: "${query}". Return JSON.`,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Citation Hydration", modelName, response, start, true);
       return extractJson(response.text, null);
     } catch (error: any) {
-      dbService.addLog('error', `Article details fetch failed for "${query}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Citation Hydration", modelName, null, start, false);
       return null;
     }
   },
 
-  // Adversarial methodology audit simulating a harsh peer reviewer
   async reviewAsReviewer2(title: string, abstract: string, reviewerPrompt: string): Promise<string> {
     const ai = getAI();
-    const prompt = `${reviewerPrompt}\n\nPaper Title: ${title}\nAbstract: ${abstract}\n\nProvide your critical peer review identifying methodology flaws and over-stated results.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-pro-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `${reviewerPrompt}\n\nTitle: ${title}\nAbstract: ${abstract}`,
       });
+      reportUsage("Reviewer 2 Protocol", modelName, response, start, true);
       return response.text || "";
     } catch (error: any) {
-      dbService.addLog('error', `Reviewer 2 audit failed for "${title}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Reviewer 2 Protocol", modelName, null, start, false);
       return "Critical review unavailable.";
     }
   },
 
-  // Generates conceptual validation quizzes for a paper
   async generateQuiz(title: string, abstract: string): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Create a 10-question multiple choice quiz for:
-    Title: ${title}
-    Abstract: ${abstract}
-    
-    Return exactly a JSON array of objects with: question, options (4 strings), correctIndex (0-3).`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Create 10-question quiz for: ${title}. Return JSON.`,
         config: { responseMimeType: "application/json" }
       });
+      reportUsage("Quiz Generation", modelName, response, start, true);
       return extractJson(response.text, []);
     } catch (error: any) {
-      dbService.addLog('error', `Quiz generation failed for "${title}": ${error?.message || 'Unknown error'}`);
+      reportUsage("Quiz Generation", modelName, null, start, false);
       return [];
     }
   },
 
-  // Discovers scientific feed sources based on user interests
   async discoverScientificFeeds(interests: string[]): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Discover 10 technical RSS/JSON feed sources related to: ${interests.join(', ')}.
-    Return a JSON array of objects with: name, url, description, type.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Discover 10 technical feeds for: ${interests.join(', ')}. Return JSON.`,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Feed Discovery", modelName, response, start, true);
       return extractJson(response.text, []);
     } catch (error: any) {
-      dbService.addLog('error', `Feed discovery failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Feed Discovery", modelName, null, start, false);
       return [];
     }
   },
 
-  // Performs a live sonar sweep for recent academic updates related to tracked entities
   async getRadarUpdates(papers: string[], authors: string[]): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Sweep for latest updates (citations, publications) for papers: [${papers.join(', ')}] and authors: [${authors.join(', ')}].
-    Return a JSON array of objects with: title, authors (array), snippet, year, url, reason, source, citationCount.`;
+    const start = Date.now();
+    const modelName = 'gemini-3-flash-preview';
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
+        model: modelName,
+        contents: `Sweep for updates: [${papers.join(', ')}] and [${authors.join(', ')}]. Return JSON.`,
         config: { tools: [{ googleSearch: {} }] }
       });
+      reportUsage("Sonar Sweep", modelName, response, start, true);
       return extractJson(response.text, []);
     } catch (error: any) {
-      dbService.addLog('error', `Radar ping failed: ${error?.message || 'Unknown error'}`);
+      reportUsage("Sonar Sweep", modelName, null, start, false);
       return [];
     }
   }
