@@ -90,6 +90,8 @@ export const dbService = {
     
     if (parsed.version !== APP_VERSION) {
       parsed.version = APP_VERSION;
+      // Version update purges diagnostic buffer as per test requirement
+      parsed.logs = [];
     }
 
     if (!parsed.logs) parsed.logs = [];

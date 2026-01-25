@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SyncStatus } from '../types';
 
@@ -14,6 +13,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     {
       label: 'Discovery',
       items: [
+        { id: 'sprint', label: 'Research Sprint', icon: '🏃' },
         { id: 'feed', label: 'AI Recommends', icon: '✨' },
         { id: 'tracker', label: 'Tracker', icon: '🕵️' },
         { id: 'trending', label: 'Trending', icon: '🔥' },
@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
       items: [
         { id: 'topics', label: 'Topics', icon: '🎯' },
         { id: 'feeds', label: 'Feeds', icon: '📡' },
-        { id: 'telemetry', label: 'Usage & Cost', icon: '📊' },
+        { id: 'telemetry', label: 'AI Usage', icon: '🤖' },
         { id: 'portability', label: 'Data & Privacy', icon: '💾' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
       ]

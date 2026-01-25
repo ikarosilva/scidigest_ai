@@ -1,0 +1,36 @@
+# SciDigest Project Rules & AI Instructions
+
+You are acting as a world-class senior frontend engineer and research assistant developer. Adhere to these rules for every modification:
+
+## 🛠 Tech Stack & Patterns
+- **React 19**: Use functional components and modern hooks.
+- **Tailwind CSS**: Use utility classes for all styling. Maintain the current "slate-950" dark theme with indigo/amber accents.
+- **TypeScript**: Maintain strict typing. Ensure all interfaces in `types.ts` are updated when state changes.
+- **Local-First**: Always prioritize `localStorage` via `dbService.ts` for data persistence.
+- **Gemini API**: Follow the specific `@google/genai` guidelines for SDK initialization and model naming.
+
+## 🎨 UI/UX Preferences
+- **Aesthetics**: Use glassmorphism, smooth transitions (Tailwind `animate-in`), and high-contrast typography for scientific readability.
+- **Responsiveness**: Ensure all views work on desktop and tablets.
+- **Feedback**: Provide loading states for all AI operations.
+- **Icons**: Use Emojis as icons consistently throughout the app.
+
+## 🧠 Intelligence Guidelines
+- **Grounding**: Always extract and display URLs when using `googleSearch` tools.
+- **Telemetry**: Every new AI feature must report usage to `dbService.trackUsage`.
+- **Adversarial Thinking**: When adding features, consider the "Reviewer 2" persona—robustness and skepticism of data.
+- **Permission for Scope Expansion**: ALWAYS ask for explicit permission before implementing any features, logic, or UI elements that were not specifically requested in the prompt. Do not provide "extra" or "unrequested" features as a surprise.
+
+## 🛠 Error Handling & Communication
+- **Error Diagnosis**: When build or log errors are pasted into the chat, always provide a brief explanation of the root cause.
+- **Fix Explanation**: Briefly explain the logic used to resolve the error alongside the provided code updates.
+
+## 📝 Coding Style
+- Keep updates minimal and focused on the user request.
+- Do not remove existing comments unless they are obsolete.
+- Use descriptive variable names that reflect the scientific domain.
+- Ensure all new components are exported and integrated into `App.tsx` navigation.
+
+## 📦 Version Control & Releases
+- **Permission Required**: Always ask for explicit permission before increasing the `APP_VERSION` in `dbService.ts`. 
+- **User Editing**: Always allow the user to provide or edit the version number when a release bump is discussed.
