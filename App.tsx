@@ -22,6 +22,7 @@ import LogSection from './components/LogSection';
 import GuideSection from './components/GuideSection';
 import ManualAddModal from './components/ManualAddModal';
 import SprintSection from './components/SprintSection';
+import Dashboard from './components/Dashboard';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
@@ -29,7 +30,7 @@ import { cloudSyncService } from './services/cloudSyncService';
 import { Article, Book, Note, Sentiment, SyncStatus, Feed, AIConfig, AppState, SocialProfiles, FeedSourceType, Shelf } from './types';
 
 const App: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState('sprint');
+  const [currentTab, setCurrentTab] = useState('dashboard');
   const [data, setData] = useState<AppState>(dbService.getData());
   const [interests, setInterests] = useState<string[]>(dbService.getInterests());
   const [feeds, setFeeds] = useState<Feed[]>(dbService.getFeeds());
@@ -137,6 +138,16 @@ const App: React.FC = () => {
       
       <main className={`flex-1 ml-64 ${mainPadding} min-h-screen`}>
         <div className={`${contentWidth}`}>
+          {currentTab === 'dashboard' && (
+            <Dashboard 
+              articles={data.articles}
+              totalReadTime={data.totalReadTime}
+              onNavigate={setCurrentTab}
+              onRead={handleOpenReader}
+              onUpdateArticle={handleUpdateArticle}
+            />
+          )}
+
           {currentTab === 'sprint' && (
             <SprintSection 
               articles={data.articles}
@@ -205,7 +216,12 @@ const App: React.FC = () => {
                   <p className="text-slate-400 mt-1">Scientific literature management.</p>
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setShowManualAdd(true)} className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">📥 Add Paper</button>
+                  <button onClick={() => setCurrentTab('trending')} className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all flex items-center gap-2">
+                    <span>🎓</span> Sync Scholar
+                  </button>
+                  <button onClick={() => setShowManualAdd(true)} className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all flex items-center gap-2">
+                    <span>📥</span> Add Paper
+                  </button>
                 </div>
               </header>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

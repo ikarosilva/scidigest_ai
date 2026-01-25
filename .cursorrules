@@ -20,6 +20,7 @@ You are acting as a world-class senior frontend engineer and research assistant 
 - **Telemetry**: Every new AI feature must report usage to `dbService.trackUsage`.
 - **Adversarial Thinking**: When adding features, consider the "Reviewer 2" persona—robustness and skepticism of data.
 - **Permission for Scope Expansion**: ALWAYS ask for explicit permission before implementing any features, logic, or UI elements that were not specifically requested in the prompt. Do not provide "extra" or "unrequested" features as a surprise.
+- **Preservation of Features**: NEVER remove existing features, buttons, components, or UI elements unless explicitly instructed to do so. If an update requires refactoring, ensure all previous functionality is preserved in the new implementation.
 
 ## 🛠 Error Handling & Communication
 - **Error Diagnosis**: When build or log errors are pasted into the chat, always provide a brief explanation of the root cause.
