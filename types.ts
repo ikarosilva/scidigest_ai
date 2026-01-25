@@ -21,6 +21,13 @@ export type QuizStatus = 'not-taken' | 'pass' | 'fail';
 
 export type ReadingMode = 'default' | 'paper' | 'night';
 
+export interface LogEntry {
+  version: string;
+  type: 'error' | 'warning' | 'info';
+  date: string;
+  message: string;
+}
+
 export interface AIConfig {
   recommendationBias: RecommendationBias;
   reviewer2Prompt: string;
@@ -116,6 +123,7 @@ export interface AppState {
   totalReadTime: number;
   socialProfiles: SocialProfiles;
   trackedAuthors: string[]; // New: List of authors to monitor
+  logs: LogEntry[]; // New: System circular log buffer
 }
 
 export type NetworkViewMode = 'notes' | 'articles' | 'topics' | 'unified' | 'datasets' | 'author';

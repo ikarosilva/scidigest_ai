@@ -378,7 +378,7 @@ export const geminiService = {
 
   async reviewAsReviewer2(title: string, abstract: string, customPrompt: string) {
     const ai = getAI();
-    const finalPrompt = `${customPrompt}\n\nTitle: ${title}\nAbstract: ${abstract}`;
+    const finalPrompt = `Provide a concise, blunt, and highly critical review in 3-5 punchy bullet points maximum. ${customPrompt}\n\nTitle: ${title}\nAbstract: ${abstract}`;
     
     try {
       const response = await ai.models.generateContent({

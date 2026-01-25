@@ -17,6 +17,7 @@ import FeedbackModal from './components/FeedbackModal';
 import SynthesisModal from './components/SynthesisModal';
 import InterestsManager from './components/InterestsManager';
 import VersionSection from './components/VersionSection';
+import LogSection from './components/LogSection';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
@@ -96,6 +97,7 @@ const App: React.FC = () => {
             if (confirm("New research data found on another device. Update now?")) {
               const { success } = dbService.importFullBackup(JSON.stringify(cloudData));
               if (success) {
+                dbService.addLog('info', 'Cloud sync: Successfully merged remote data into local context.');
                 window.location.reload();
                 return;
               }
@@ -117,9 +119,11 @@ const App: React.FC = () => {
       };
       const success = await cloudSyncService.uploadData(payload);
       setSyncStatus(success ? 'synced' : 'error');
+      if (!success) dbService.addLog('error', 'Cloud sync: Upload operation failed.');
     } catch (e) {
       console.error("Sync Error", e);
       setSyncStatus('error');
+      dbService.addLog('error', `Cloud sync exception: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   }, [syncStatus]);
 
@@ -261,6 +265,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error("Scholar Sync Critical Error:", err);
+      dbService.addLog('error', `Scholar Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
       if (err instanceof Error && err.message.includes("Requested entity was not found")) {
         alert("Your API key configuration appears invalid. Please reconnect.");
         setShowApiKeyDialog(true);
@@ -325,10 +330,12 @@ const App: React.FC = () => {
           setData({ ...newData });
           alert(`Success! AI librarian ingested ${filteredBooks.length} relevant scientific books into your context.`);
           setShowImportBooks(false);
+          dbService.addLog('info', `Successfully ingested ${filteredBooks.length} books from GoodReads export.`);
         } else {
           alert('No relevant scientific books found in that file.');
         }
       } catch (err) {
+        dbService.addLog('error', `GoodReads Ingestion failed: ${err instanceof Error ? err.message : 'Invalid JSON'}`);
         alert('Failed to process GoodReads file. Please ensure it is a valid JSON export.');
       }
       setIsProcessingBooks(false);
@@ -342,10 +349,19 @@ const App: React.FC = () => {
       const { success } = dbService.importFullBackup(text);
       if (success) {
         alert("Database restored successfully.");
+        dbService.addLog('info', 'Manual data restoration completed successfully.');
         window.location.reload();
       } else {
+        dbService.addLog('error', 'Manual restoration attempt failed: Invalid file format.');
         alert("Failed to restore. Invalid file format.");
       }
+    }
+  };
+
+  const handleClearLogs = () => {
+    if (confirm("Clear system log buffer? This cannot be undone.")) {
+      dbService.clearLogs();
+      setData(dbService.getData());
     }
   };
 
@@ -695,6 +711,8 @@ const App: React.FC = () => {
           )}
 
           {currentTab === 'version' && <VersionSection />}
+
+          {currentTab === 'logs' && <LogSection logs={data.logs} onClear={handleClearLogs} />}
 
           {currentTab === 'portability' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

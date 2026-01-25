@@ -214,6 +214,23 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
+  const handleSaveReviewAsNote = () => {
+    if (!article || !reviewer2Output) return;
+    
+    const newNoteId = Math.random().toString(36).substr(2, 9);
+    const newNote: Note = {
+      id: newNoteId,
+      title: `Adversarial Audit: ${article.title.substring(0, 30)}...`,
+      content: `### Reviewer 2 Audit Output\n\n${reviewer2Output}`,
+      articleIds: [article.id],
+      lastEdited: new Date().toISOString()
+    };
+    
+    onCreateNote(newNote);
+    dbService.linkNoteToArticle(newNoteId, article.id);
+    alert("Reviewer 2 audit saved as a research note.");
+  };
+
   const handleGenerateCritique = async () => {
     if (!article) return;
     setIsCritiquing(true);
@@ -585,7 +602,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'reviewer' && (
-                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
                     <header className="bg-red-900/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-4">
                       <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-xl shrink-0">👿</div>
                       <div>
@@ -613,7 +630,20 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         <div className="bg-slate-950/60 border border-red-500/20 p-5 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-line font-serif shadow-inner">
                           {reviewer2Output}
                         </div>
-                        <button onClick={handleSummonReviewer2} className="w-full text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase">Re-Review</button>
+                        <div className="flex gap-2">
+                           <button 
+                             onClick={handleSaveReviewAsNote}
+                             className="flex-1 bg-slate-800 hover:bg-slate-700 text-indigo-400 text-[10px] font-black uppercase tracking-widest py-3 rounded-xl border border-slate-700 transition-all"
+                           >
+                             Save as Note
+                           </button>
+                           <button 
+                             onClick={handleSummonReviewer2} 
+                             className="flex-1 text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase py-3 rounded-xl border border-slate-800"
+                           >
+                             Re-Review
+                           </button>
+                        </div>
                       </div>
                     )}
                   </div>

@@ -1,5 +1,5 @@
 
-import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf } from '../types';
+import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf, LogEntry } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
 const INTERESTS_KEY = 'scidigest_interests_v1';
@@ -8,6 +8,8 @@ const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
 export const APP_VERSION = '1.5.1';
 export const RELEASE_DATE = 'May 26, 2024';
+
+const MAX_LOG_ENTRIES = 50;
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
@@ -79,11 +81,19 @@ export const dbService = {
       aiConfig: dbService.getAIConfig(),
       totalReadTime: 0,
       socialProfiles: {},
-      trackedAuthors: []
+      trackedAuthors: [],
+      logs: []
     };
     const parsed = JSON.parse(data) as AppState;
     
-    // Migration Logic
+    // Migration & Circular Buffer Version Reset
+    if (parsed.version !== APP_VERSION) {
+      parsed.logs = []; // Erase buffer when version updates
+      parsed.version = APP_VERSION;
+    }
+
+    if (!parsed.logs) parsed.logs = [];
+
     if (!parsed.shelves || parsed.shelves.length === 0) {
       parsed.shelves = [DEFAULT_QUEUE_SHELF];
     }
@@ -120,6 +130,23 @@ export const dbService = {
   saveData: (data: AppState) => {
     data.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  },
+  addLog: (type: 'error' | 'warning' | 'info', message: string) => {
+    const data = dbService.getData();
+    const newEntry: LogEntry = {
+      version: APP_VERSION,
+      type,
+      date: new Date().toISOString(),
+      message
+    };
+    // Circular buffer logic: Prepend new and slice to limit
+    data.logs = [newEntry, ...(data.logs || [])].slice(0, MAX_LOG_ENTRIES);
+    dbService.saveData(data);
+  },
+  clearLogs: () => {
+    const data = dbService.getData();
+    data.logs = [];
+    dbService.saveData(data);
   },
   saveSocialProfiles: (profiles: SocialProfiles) => {
     const data = dbService.getData();
