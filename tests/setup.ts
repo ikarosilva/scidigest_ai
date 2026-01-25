@@ -84,7 +84,7 @@ vi.mock('@google/genai', () => {
 
     let data: any = [0, 1, 2]; // Default array for rankings
 
-    if (prompt.includes('Define the technical term') || prompt.includes('Analyze this scientific paper') || prompt.includes('Find detailed academic metadata')) {
+    if (prompt.includes('Define "') || prompt.includes('Analyze this scientific paper') || prompt.includes('academic metadata for')) {
       data = { 
         term: 'Neural Networks', 
         title: 'Test Paper', 
@@ -95,7 +95,7 @@ vi.mock('@google/genai', () => {
         authors: ['Test Author'],
         year: '2024'
       };
-    } else if (prompt.includes('find the top 6 trending') || prompt.includes('Search for the highest rated technical books')) {
+    } else if (prompt.includes('trending papers on') || prompt.includes('Search highest rated books')) {
       data = { results: [] };
     } else if (prompt.includes('Identify which of these tags represent')) {
       data = { tags: ['AI'], newTopics: [] };
@@ -105,7 +105,11 @@ vi.mock('@google/genai', () => {
 
     return Promise.resolve({
       text: mockResponseJson,
-      candidates: [{ content: { parts: [{ text: mockResponseJson }] } }]
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20, totalTokenCount: 30 },
+      candidates: [{ 
+        content: { parts: [{ text: mockResponseJson }] },
+        groundingMetadata: { groundingChunks: [] }
+      }]
     });
   });
 
