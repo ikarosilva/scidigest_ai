@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { FeedSourceType, Article, Feed, AIConfig } from '../types';
 import { geminiService } from '../services/geminiService';
+import { dbService } from '../services/dbService';
 
 interface FeedMonitorProps {
   ratedArticles: Article[];
@@ -23,8 +24,10 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
   const [candidates, setCandidates] = useState<any[]>(MOCK_NEW_PAPERS);
   const [ranking, setRanking] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [quickTakes, setQuickTakes] = useState<Record<string, string>>({});
+  const [shelfMenuCandidateId, setShelfMenuCandidateId] = useState<string | null>(null);
+
+  const shelves = dbService.getData().shelves;
 
   const handleRank = async () => {
     setLoading(true);
@@ -48,8 +51,8 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
     ? ranking.map(idx => candidates[idx]) 
     : candidates;
 
-  const createArticleFromCandidate = (c: any, inQueue = false): Article => ({
-    id: Math.random().toString(),
+  const createArticleFromCandidate = (c: any, shelfIds: string[] = []): Article => ({
+    id: Math.random().toString(36).substr(2, 9),
     title: c.title,
     authors: c.authors || ['Author Placeholder'],
     abstract: c.snippet || c.abstract,
@@ -64,7 +67,7 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
     noteIds: [] as string[],
     userReadTime: 0,
     pdfUrl: (c as any).pdfUrl,
-    shelfIds: inQueue ? ['default-queue'] : [],
+    shelfIds: shelfIds,
     userReviews: {
       sentiment: 'Unknown',
       summary: 'Newly discovered in feed.',
@@ -72,6 +75,12 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
       citedByUrl: `https://scholar.google.com/scholar?q=${encodeURIComponent(c.title)}`
     }
   });
+
+  const handleAssignToShelfAndIngest = (c: any, shelfId: string) => {
+    const article = createArticleFromCandidate(c, [shelfId]);
+    onAdd(article);
+    setShelfMenuCandidateId(null);
+  };
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
@@ -129,9 +138,31 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
 
                 <p className="text-sm text-slate-400 mb-6 flex-1 line-clamp-4 italic">"{c.snippet}"</p>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-2 relative">
                   <button onClick={() => onAdd(createArticleFromCandidate(c))} className="flex-1 bg-indigo-600 text-white text-[11px] font-black uppercase py-2 rounded-xl">📥 Ingest</button>
-                  <button onClick={() => onRead(createArticleFromCandidate(c))} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-indigo-400">📖</button>
+                  <button 
+                    onClick={() => setShelfMenuCandidateId(shelfMenuCandidateId === c.id ? null : c.id)}
+                    className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-indigo-400 border border-slate-700"
+                  >
+                    📂
+                  </button>
+                  <button onClick={() => onRead(createArticleFromCandidate(c))} className="px-4 py-2 bg-slate-800 text-slate-400 rounded-xl hover:text-indigo-400 border border-slate-700">📖</button>
+
+                  {shelfMenuCandidateId === c.id && (
+                    <div className="absolute bottom-full left-0 mb-2 w-full bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-30 p-2 animate-in zoom-in-95 duration-150 origin-bottom">
+                      <div className="text-[9px] uppercase font-black text-slate-500 p-2 tracking-widest border-b border-slate-700 mb-1">Assign & Ingest</div>
+                      {shelves.map(shelf => (
+                        <button
+                          key={shelf.id}
+                          onClick={() => handleAssignToShelfAndIngest(c, shelf.id)}
+                          className="w-full flex items-center gap-3 p-2 hover:bg-slate-700 rounded-lg transition-colors group"
+                        >
+                          <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: shelf.color }}></div>
+                          <span className="text-xs text-slate-200">{shelf.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

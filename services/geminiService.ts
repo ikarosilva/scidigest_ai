@@ -6,8 +6,13 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const extractJson = (text: string, fallback: any = []) => {
   try {
-    const match = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+    // Look for JSON blocks in the text
+    const match = text.match(/\[[\s\S]*\]/); // Find the array
     if (match) return JSON.parse(match[0]);
+    
+    const objMatch = text.match(/\{[\s\S]*\}/); // Find a single object
+    if (objMatch) return [JSON.parse(objMatch[0])];
+
     return JSON.parse(text);
   } catch (e) {
     console.warn("JSON Parse Warning:", e);
@@ -256,36 +261,53 @@ export const geminiService = {
   /**
    * Retrieves trending research papers based on topics and timescale.
    */
-  async getTrendingResearch(topics: string[], timeScale: string): Promise<any[]> {
+  async getTrendingResearch(topics: string[], timeScale: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, find trending research papers in these topics: ${topics.join(', ')} over the last ${timeScale}. Return a JSON array of objects with keys: title, authors (array), snippet, year, source, heatScore (0-100), citationCount, scholarUrl.`;
+    const prompt = `Use the googleSearch tool to find exactly 6 trending scientific research papers in these specific domains: ${topics.join(', ')} published within the last ${timeScale}. 
+    Focus on papers with high citation velocity or significant impact.
+    Return the results in a JSON array format where each object has these exact keys: title, authors (array of strings), snippet (1-2 sentence description), year (string), source (one of: ArXiv, Nature, Science, Cell, IEEE, etc), heatScore (0-100), citationCount (estimate), scholarUrl.
+    Ensure you ONLY return the JSON array, no prose.`;
+    
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '[]');
+      
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const results = extractJson(response.text || '[]');
+      
+      return { results, groundingSources: groundingChunks };
     } catch (error) {
-      return [];
+      console.error("Trending Error:", error);
+      return { results: [], groundingSources: [] };
     }
   },
 
   /**
    * Searches for scientific books on Amazon using search grounding.
    */
-  async searchAmazonBooks(topics: string[]): Promise<any[]> {
+  async searchAmazonBooks(topics: string[]): Promise<any> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, find highly-rated scientific books on Amazon for these topics: ${topics.join(', ')}. Return a JSON array of objects with keys: title, author, rating, price, amazonUrl, description.`;
+    const prompt = `Using the googleSearch tool, find 6 highly-rated scientific monographs or textbooks on Amazon related to these topics: ${topics.join(', ')}. 
+    Return a JSON array of objects with keys: title, author, rating (0.0-5.0), price (e.g. $49.99), amazonUrl, description (short).
+    Ensure you ONLY return the JSON array.`;
+    
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '[]');
+      
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const results = extractJson(response.text || '[]');
+      
+      return { results, groundingSources: groundingChunks };
     } catch (error) {
-      return [];
+      console.error("Amazon Books Error:", error);
+      return { results: [], groundingSources: [] };
     }
   },
 

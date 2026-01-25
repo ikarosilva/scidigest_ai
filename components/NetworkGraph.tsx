@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Article, Note, Book, NetworkViewMode, SocialProfiles } from '../types';
@@ -266,8 +265,8 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
 
     for (const article of papersToMine) {
       try {
-        const refs = await geminiService.discoverReferences(article);
-        onUpdateArticle(article.id, { references: refs });
+        const { references, groundingSources } = await geminiService.discoverReferences(article);
+        onUpdateArticle(article.id, { references, groundingSources });
       } catch (e) {
         console.error("Mining error for", article.title, e);
       }

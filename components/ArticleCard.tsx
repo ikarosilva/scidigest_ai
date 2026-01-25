@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Article, Sentiment, Note, Shelf } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -80,6 +81,16 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
   };
 
+  const toggleShelf = (shelfId: string) => {
+    const currentShelves = article.shelfIds || [];
+    const isCurrentlyIn = currentShelves.includes(shelfId);
+    let newShelfIds = isCurrentlyIn 
+      ? currentShelves.filter(id => id !== shelfId)
+      : [...currentShelves, shelfId];
+    
+    onUpdate(article.id, { shelfIds: newShelfIds });
+  };
+
   const sentimentColors: Record<Sentiment, string> = {
     Positive: 'bg-green-500/20 text-green-400 border-green-500/30',
     Neutral: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -87,8 +98,10 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     Unknown: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
   };
 
+  const activeShelvesCount = article.shelfIds?.length || 0;
+
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card relative">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card relative flex flex-col">
       <div className="flex justify-between items-start mb-3">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
@@ -124,6 +137,21 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
 
+      {/* Shelf Badges */}
+      {activeShelvesCount > 0 && (
+        <div className="flex flex-wrap gap-1 mb-3">
+           {article.shelfIds.map(sid => {
+             const s = shelves.find(sh => sh.id === sid);
+             return s ? (
+               <span key={sid} className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500 flex items-center gap-1.5 bg-slate-950/50">
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }}></span>
+                  {s.name}
+               </span>
+             ) : null;
+           })}
+        </div>
+      )}
+
       <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-800/50">
         <div className="flex flex-col">
           <span className="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Scholar Impact</span>
@@ -142,27 +170,63 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
         </button>
       </div>
 
-      <div className="flex gap-2">
-        <button 
-          onClick={handleSummarize}
-          disabled={loading}
-          className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition-colors disabled:opacity-50"
-        >
-          {loading ? 'Thinking...' : '⚡ AI Summary'}
-        </button>
-        <button 
-          onClick={handleListen}
-          className={`px-4 py-2 border rounded-lg transition-all ${isPlaying ? 'bg-indigo-500 border-indigo-400 text-white animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-indigo-400'}`}
-          title="Listen to AI Briefing"
-        >
-          {isPlaying ? '🔊' : '🎧'}
-        </button>
-        <button 
-          onClick={onRead}
-          className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
-        >
-          📖
-        </button>
+      <div className="flex flex-col gap-2 mt-auto relative">
+        <div className="flex gap-2">
+          <button 
+            onClick={handleSummarize}
+            disabled={loading}
+            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition-colors disabled:opacity-50"
+          >
+            {loading ? 'Thinking...' : '⚡ AI Summary'}
+          </button>
+          <button 
+            onClick={() => setShowShelfMenu(!showShelfMenu)}
+            className={`px-4 py-2 border rounded-lg transition-all ${activeShelvesCount > 0 ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
+            title="Manage Shelves"
+          >
+            📂
+          </button>
+          <button 
+            onClick={handleListen}
+            className={`px-4 py-2 border rounded-lg transition-all ${isPlaying ? 'bg-indigo-500 border-indigo-400 text-white animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-indigo-400'}`}
+            title="Listen to AI Briefing"
+          >
+            {isPlaying ? '🔊' : '🎧'}
+          </button>
+          <button 
+            onClick={onRead}
+            className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            📖
+          </button>
+        </div>
+
+        {showShelfMenu && (
+          <div className="absolute bottom-full left-0 mb-2 w-full bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-30 p-2 animate-in zoom-in-95 duration-150 origin-bottom">
+            <div className="text-[9px] uppercase font-black text-slate-500 p-2 tracking-widest border-b border-slate-700 mb-1">Literature Shelves</div>
+            {shelves.map(shelf => (
+              <button
+                key={shelf.id}
+                onClick={() => toggleShelf(shelf.id)}
+                className="w-full flex items-center justify-between p-2 hover:bg-slate-700 rounded-lg transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shelf.color }}></div>
+                   <span className="text-xs text-slate-200">{shelf.name}</span>
+                </div>
+                {article.shelfIds?.includes(shelf.id) && (
+                  <span className="text-indigo-400 text-xs">✓</span>
+                )}
+              </button>
+            ))}
+            <button 
+              onClick={() => setShowShelfMenu(false)}
+              className="w-full text-[10px] text-slate-500 hover:text-white pt-2 transition-colors border-t border-slate-700 mt-1"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
