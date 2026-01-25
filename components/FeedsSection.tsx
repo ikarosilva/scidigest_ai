@@ -72,7 +72,7 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-      <header className="flex justify-between items-end">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
             <span>📡</span> Feeds
@@ -81,24 +81,26 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
             Configure the scientific sources monitored by the AI discovery engine.
           </p>
         </div>
-        <button 
-          onClick={handleDiscover}
-          disabled={isDiscovering}
-          className={`px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-3 ${
-            isDiscovering 
-            ? 'bg-slate-800 text-slate-500 cursor-wait' 
-            : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-600/20'
-          }`}
-        >
-          {isDiscovering ? (
-            <>
-              <span className="w-4 h-4 border-2 border-slate-500/20 border-t-slate-500 rounded-full animate-spin"></span>
-              Exploring Web...
-            </>
-          ) : (
-            <>🪄 AI Discover Feeds</>
-          )}
-        </button>
+        <div className="flex gap-3 w-full md:w-auto">
+          <button 
+            onClick={handleDiscover}
+            disabled={isDiscovering}
+            className={`flex-1 md:flex-none px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-3 border ${
+              isDiscovering 
+              ? 'bg-slate-800 text-slate-500 cursor-wait border-slate-700' 
+              : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-600/20 border-indigo-500'
+            }`}
+          >
+            {isDiscovering ? (
+              <>
+                <span className="w-4 h-4 border-2 border-slate-500/20 border-t-slate-500 rounded-full animate-spin"></span>
+                Exploring...
+              </>
+            ) : (
+              <>🔍 Explore Catalogs</>
+            )}
+          </button>
+        </div>
       </header>
 
       {/* Discovery Results Section */}
@@ -107,7 +109,7 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
            <div className="flex justify-between items-center mb-6">
               <div>
                 <h3 className="text-xl font-bold text-indigo-300">Discovered Sources</h3>
-                <p className="text-sm text-slate-400 mt-1">Found based on your active researchTrajectories.</p>
+                <p className="text-sm text-slate-400 mt-1">Found based on your active research trajectories.</p>
               </div>
               <button 
                 onClick={() => setDiscoveredFeeds([])}
@@ -187,8 +189,22 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
             </div>
           ))}
           {feeds.length === 0 && !isDiscovering && discoveredFeeds.length === 0 && (
-            <div className="text-center py-10 bg-slate-950 rounded-2xl border-2 border-dashed border-slate-800 text-slate-500 italic text-sm">
-              No feed sources configured. Use AI Discovery or add one below to start monitoring.
+            <div className="text-center py-20 bg-slate-950/50 rounded-[2rem] border-2 border-dashed border-slate-800 flex flex-col items-center justify-center gap-6">
+              <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center text-4xl shadow-inner border border-slate-800/50">
+                🔭
+              </div>
+              <div className="max-w-md">
+                <h4 className="text-lg font-bold text-slate-300">Your Radar is Quiet</h4>
+                <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+                  No feed sources are currently configured. SciDigest works best when connected to major journals, preprint servers, and technical blogs.
+                </p>
+              </div>
+              <button 
+                onClick={handleDiscover}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl shadow-xl transition-all flex items-center gap-2"
+              >
+                <span>✨</span> Discover Scientific Catalogs
+              </button>
             </div>
           )}
         </div>

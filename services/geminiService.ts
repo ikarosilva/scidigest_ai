@@ -374,7 +374,9 @@ export const geminiService = {
    */
   async discoverScientificFeeds(interests: string[]): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, find active RSS or scientific news feeds for these research interests: ${interests.join(', ')}. Return a JSON array of objects with keys: name, url, description, type (e.g. Journal, Blog, Pre-print).`;
+    const prompt = `Using the googleSearch tool, search major scientific publishers (Nature, Science, Elsevier, Springer, Cell), pre-print servers (arXiv, bioRxiv, medRxiv), and academic blogs to find active RSS, Atom, or scientific news feeds relevant to these research interests: ${interests.join(', ')}. 
+    Look specifically for direct RSS URLs or "latest paper" feed links.
+    Return a JSON array of objects with keys: name, url, description, type (e.g. Journal, Blog, Pre-print, Catalog).`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
