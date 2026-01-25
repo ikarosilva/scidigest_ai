@@ -106,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
                     : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
               >
-                <span className={`text-lg ${tab.id === 'tracker' ? 'detective-pulse' : ''}`}>{tab.icon}</span>
+                <span className="text-lg">{tab.icon}</span>
                 <span className="text-sm font-semibold">{tab.label}</span>
               </button>
             ))}

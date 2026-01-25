@@ -63,7 +63,7 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
       <header className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-            <span className="detective-pulse">🕵️</span> Research Tracker
+            <span>🕵️</span> Research Tracker
           </h2>
           <p className="text-slate-400 mt-1">Live Sonar for citations and academic trajectories.</p>
         </div>
@@ -100,7 +100,7 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
         {radarHits.length === 0 && !isScanning ? (
           <div className="text-center space-y-6 relative z-10">
              <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center mx-auto text-4xl shadow-inner group">
-                <span className="group-hover:scale-125 transition-transform duration-500 detective-pulse">🕵️</span>
+                <span className="group-hover:scale-125 transition-transform duration-500">🕵️</span>
              </div>
              <div className="max-w-md">
                 <h3 className="text-xl font-bold text-slate-300">Sonar Silent</h3>
@@ -109,6 +109,7 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
                 </p>
              </div>
              <div className="flex justify-center gap-8 py-4 border-t border-slate-800/50 mt-4">
+                <div className="flex justify-center gap-8 py-4 border-t border-slate-800/50 mt-4">
                 <div className="flex flex-col">
                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-[0.2em]">Author Pins</span>
                    <span className="text-lg font-bold text-indigo-300">{trackedAuthors.length}</span>
