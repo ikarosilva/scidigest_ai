@@ -22,8 +22,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     {
       label: 'Workspace',
       items: [
-        { id: 'shelves', label: 'Shelves', icon: '📥' },
         { id: 'reader', label: 'Reader', icon: '📖' },
+        { id: 'shelves', label: 'Shelves', icon: '📥' },
         { id: 'library', label: 'Library', icon: '📚' },
         { id: 'notes', label: 'Notes', icon: '✍️' },
       ]

@@ -153,30 +153,47 @@ const App: React.FC = () => {
       reader.onload = (event: any) => {
         try {
           const raw = JSON.parse(event.target.result);
-          const books: any[] = Array.isArray(raw) ? raw : (raw.books || []);
-          const existingIds = new Set(data.books.map(b => b.id));
+          const rawBooks: any[] = Array.isArray(raw) ? raw : (raw.books || []);
           
-          const newBooks: Book[] = books.map(b => ({
-            id: b.id || Math.random().toString(36).substr(2, 9),
-            title: b.title || 'Untitled Book',
-            author: b.author || b.authors?.join(', ') || 'Unknown Author',
-            rating: b.rating || b.user_rating || 0,
-            dateAdded: b.date_added || new Date().toISOString(),
-            amazonUrl: b.amazon_url || b.link,
-            description: b.description || b.summary,
-            shelfIds: [],
-            tags: b.tags || b.shelves || []
-          })).filter(b => !existingIds.has(b.id));
+          const existingTitles = new Set(data.books.map(b => b.title.toLowerCase().trim()));
+          const userInterests = dbService.getInterests().map(i => i.toLowerCase().trim());
+          
+          const newBooks: Book[] = rawBooks
+            .filter(b => {
+              // Only import books that have a title and are marked as 'read'
+              return b && 
+                     typeof b.book === 'string' && 
+                     b.book.trim().length > 0 &&
+                     b.read_status === 'read';
+            })
+            .filter(b => {
+              // Only import books that match at least one chosen research topic
+              const title = b.book.toLowerCase().trim();
+              return userInterests.some(interest => title.includes(interest));
+            })
+            .map(b => ({
+              id: Math.random().toString(36).substr(2, 9),
+              title: b.book, // Map GoodReads 'book' to title
+              author: b.author || 'Unknown Author',
+              rating: typeof b.rating === 'number' ? b.rating : 0, // Map 'rating'
+              dateAdded: b.created_at || new Date().toISOString(),
+              amazonUrl: `https://www.amazon.com/s?k=${encodeURIComponent(b.book)}`,
+              description: b.review !== "(not provided)" ? b.review : (b.notes !== "(not provided)" ? b.notes : ""),
+              shelfIds: [],
+              tags: ['GoodReads Import']
+            }))
+            .filter(b => !existingTitles.has(b.title.toLowerCase().trim()));
 
           if (newBooks.length > 0) {
             dbService.addBooks(newBooks);
             setData(dbService.getData());
-            alert(`Successfully imported ${newBooks.length} books from GoodReads!`);
+            alert(`Successfully imported ${newBooks.length} topic-matched 'read' books from GoodReads!`);
           } else {
-            alert("No new books found to import.");
+            alert("No new 'read' books found matching your current research topics.");
           }
         } catch (err) {
-          alert("Failed to parse GoodReads JSON. Ensure it is a valid array of book objects.");
+          console.error("GoodReads Import Error:", err);
+          alert("Failed to parse GoodReads JSON. Ensure it matches the expected format.");
         }
       };
       reader.readAsText(file);

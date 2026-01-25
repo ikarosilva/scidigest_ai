@@ -37,7 +37,9 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'lexicon' | 'whatif' | 'reviewer' | 'quiz' | 'citations'>('notes');
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [showTimer, setShowTimer] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'notes' | 'lexicon' | 'whatif' | 'reviewer' | 'quiz' | 'citations'>('notes');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   
@@ -80,6 +82,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   useEffect(() => {
     if (article) {
       setSessionSeconds(0);
+      setIsTimerPaused(false);
       setCritique(null); 
       setReviewer2Output(null);
       setAiDetection(null); 
@@ -89,8 +92,12 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       setQuizScore(null);
       setLexiconResult(null);
       setWhatIfMessages([]);
+      if (timerRef.current) window.clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => {
-        setSessionSeconds(prev => prev + 1);
+        setSessionSeconds(prev => {
+          if (isTimerPaused) return prev;
+          return prev + 1;
+        });
       }, 1000);
     }
     
@@ -100,6 +107,20 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       }
     };
   }, [article?.id]);
+
+  // Handle pause toggle within the same session
+  useEffect(() => {
+    if (timerRef.current) window.clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(() => {
+      setSessionSeconds(prev => {
+        if (isTimerPaused) return prev;
+        return prev + 1;
+      });
+    }, 1000);
+    return () => {
+      if (timerRef.current) window.clearInterval(timerRef.current);
+    };
+  }, [isTimerPaused]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -222,12 +243,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
-  const handlePerplexityCrossCheck = () => {
-    if (!article) return;
-    const query = encodeURIComponent(`Search for the latest data/discussions on: "${article.title}". Is there any newer version of this research or critical community consensus?`);
-    window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
-  };
-
   const handleEnterRabbitHole = async () => {
     if (!article) return;
     setEnteringRabbitHole(true);
@@ -323,33 +338,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     onCreateNote(newNote);
     dbService.linkNoteToArticle(newNoteId, article.id);
     alert("Reviewer 2 audit saved as a research note.");
-  };
-
-  const handleGenerateCritique = async () => {
-    if (!article) return;
-    setIsCritiquing(true);
-    try {
-      const result = await geminiService.critiqueArticle(article.title, article.abstract);
-      setCritique(result || "Could not generate critique.");
-    } catch (err) {
-      console.error(err);
-      setCritique("Error generating critique.");
-    } finally {
-      setIsCritiquing(false);
-    }
-  };
-
-  const handleDetectAI = async () => {
-    if (!article) return;
-    setIsDetectingAI(true);
-    try {
-      const result = await geminiService.analyzeAIProbability(article.title, article.abstract);
-      setAiDetection(result);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsDetectingAI(false);
-    }
   };
 
   const handleGenerateQuiz = async () => {
@@ -455,7 +443,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
 
   const tabButtons = [
     { id: 'notes', label: 'Notes', icon: '✍️', color: 'indigo' },
-    { id: 'intel', label: 'Intel', icon: '📡', color: 'emerald' },
     { id: 'lexicon', label: 'Lexicon', icon: '📖', color: 'indigo' },
     { id: 'whatif', label: 'What If', icon: '💡', color: 'amber' },
     { id: 'citations', label: 'Rabbit Hole', icon: '🐇', color: 'indigo' },
@@ -474,10 +461,39 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Est. Read</span>
                   <span className="text-xs font-bold text-indigo-400">{article.estimatedReadTime || 20}m</span>
                </div>
-               <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Session</span>
-                  <span className="text-xs font-mono font-bold text-emerald-400">{formatTime(sessionSeconds)}</span>
-               </div>
+               {showTimer && (
+                 <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Session</span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">{formatTime(sessionSeconds)}</span>
+                   </div>
+                   <div className="flex items-center gap-1 bg-slate-800 p-1 rounded-lg">
+                      <button 
+                        onClick={() => setIsTimerPaused(!isTimerPaused)}
+                        className="text-[10px] text-slate-400 hover:text-white transition-colors px-1"
+                        title={isTimerPaused ? "Resume Session" : "Pause Session"}
+                      >
+                        {isTimerPaused ? '▶️' : '⏸️'}
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (confirm("Reset current session timer?")) setSessionSeconds(0);
+                        }}
+                        className="text-[10px] text-slate-400 hover:text-white transition-colors px-1"
+                        title="Reset Timer"
+                      >
+                        🔄
+                      </button>
+                   </div>
+                 </div>
+               )}
+               <button 
+                 onClick={() => setShowTimer(!showTimer)}
+                 className="text-[10px] text-slate-600 hover:text-slate-400 px-1"
+                 title={showTimer ? "Hide Timer" : "Show Timer"}
+               >
+                 {showTimer ? '👁️' : '🚫'}
+               </button>
             </div>
             <h2 className="text-sm font-bold text-slate-100 truncate ml-auto opacity-70 italic">"{article.title}"</h2>
           </div>
@@ -922,71 +938,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {sidebarTab === 'intel' && (
-                  <div className="p-6 space-y-8 pb-20">
-                    <section>
-                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Critical Appraisal</h4>
-                       {!critique && !isCritiquing ? (
-                         <div className="bg-slate-950/50 border border-dashed border-slate-800 p-6 rounded-2xl text-center">
-                            <button 
-                              onClick={handleGenerateCritique}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase py-2 px-4 rounded-xl"
-                            >
-                              Generate Critique
-                            </button>
-                         </div>
-                       ) : isCritiquing ? (
-                         <div className="flex flex-col items-center gap-4 py-10">
-                            <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-                         </div>
-                       ) : (
-                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 leading-relaxed relative">
-                            {critique}
-                         </div>
-                       )}
-                    </section>
-
-                    <section>
-                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">AI Probability</h4>
-                       {!aiDetection && !isDetectingAI ? (
-                         <button 
-                           onClick={handleDetectAI}
-                           className="w-full bg-slate-950/50 border border-slate-800 p-4 rounded-xl text-xs text-slate-400"
-                         >
-                           Scan for AI Markers
-                         </button>
-                       ) : isDetectingAI ? (
-                         <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div></div>
-                       ) : aiDetection && (
-                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-amber-500/20 space-y-3">
-                            <div className="flex items-center justify-between mb-1">
-                               <span className="text-[10px] font-black uppercase text-slate-500">Probability</span>
-                               <span className="text-xs font-black text-amber-400">{aiDetection.probability}%</span>
-                            </div>
-                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                               <div className="h-full bg-amber-500" style={{ width: `${aiDetection.probability}%` }}></div>
-                            </div>
-                            <p className="text-xs text-slate-200 italic">{aiDetection.assessment}</p>
-                         </div>
-                       )}
-                    </section>
-
-                    <section>
-                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Grounding</h4>
-                       <div className="space-y-3">
-                          <button onClick={handlePerplexityCrossCheck} className="w-full bg-slate-950/40 border border-slate-800 p-4 rounded-xl text-left flex items-center justify-between group">
-                             <span className="text-[11px] font-bold text-slate-300">Perplexity Deep Dive</span>
-                             <span className="text-slate-600 group-hover:text-emerald-400 transition-colors">↗</span>
-                          </button>
-                          <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="w-full bg-slate-950/40 border border-slate-800 p-4 rounded-xl text-left flex items-center justify-between group">
-                             <span className="text-[11px] font-bold text-slate-300">Google Scholar</span>
-                             <span className="text-slate-600 group-hover:text-indigo-400 transition-colors">↗</span>
-                          </button>
-                       </div>
-                    </section>
                   </div>
                 )}
               </div>
