@@ -8,7 +8,7 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 /**
  * Robustly extracts JSON content from a text response that might contain markdown blocks.
  */
-const extractJson = (text: string, fallback: any = {}) => {
+const extractJson = (text: string | undefined, fallback: any = {}) => {
   if (!text) return fallback;
   try {
     const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -64,7 +64,7 @@ export const geminiService = {
         ],
         config: { responseMimeType: "application/json" }
       });
-      return extractJson(response.text || "{}", {});
+      return extractJson(response.text, {});
     } catch (error) {
       console.error("PDF Extraction Error:", error);
       return null;
@@ -92,7 +92,7 @@ export const geminiService = {
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
-      return extractJson(response.text || '{"tags":[], "newTopics":[]}', { tags: [], newTopics: [] });
+      return extractJson(response.text, { tags: [], newTopics: [] });
     } catch (error) {
       return { tags: [], newTopics: [] };
     }
@@ -213,7 +213,7 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '[]');
+      return extractJson(response.text, []);
     } catch (error) {
       throw error;
     }
@@ -245,7 +245,7 @@ export const geminiService = {
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
-      const result = extractJson(response.text || '[]');
+      const result = extractJson(response.text, []);
       return Array.isArray(result) ? result : candidates.map((_, i) => i);
     } catch (error) {
       console.error("Recommend Error:", error);
@@ -263,24 +263,25 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '[]');
+      return extractJson(response.text, []);
     } catch (error) {
       return [];
     }
   },
 
-  // Finds trending research papers using search grounding
+  // Finds trending research papers using search grounding with Google Scholar focus
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Find the most trending and impactful research papers from the last ${timeScale} related to: ${topics.join(', ')}. 
-    Return a JSON object with a "results" array of objects containing { title, authors (array), snippet, year, citationCount, heatScore, scholarUrl, source }.`;
+    const prompt = `Using Google Scholar via the googleSearch tool, find the most trending and impactful research papers from the last ${timeScale} related to: ${topics.join(', ')}. 
+    Prioritize papers with high citation velocity.
+    Return a JSON object with a "results" array of objects containing { title, authors (array), snippet, year, citationCount, heatScore (0-100), scholarUrl, source }.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text || '{"results":[]}');
+      const results = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { results: results.results || [], groundingSources };
     } catch (error) {
@@ -300,7 +301,7 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text || '{"results":[]}');
+      const results = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { results: results.results || [], groundingSources };
     } catch (error) {
@@ -325,7 +326,7 @@ export const geminiService = {
           responseMimeType: "application/json"
         }
       });
-      return extractJson(response.text);
+      return extractJson(response.text, { nodes: [], links: [], clusters: [] });
     } catch (error) {
       console.error("Author Network Error:", error);
       return { nodes: [], links: [], clusters: [] };
@@ -343,7 +344,7 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text || '{"references":[]}');
+      const results = extractJson(response.text, { references: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { references: results.references || [], groundingSources };
     } catch (error) {
@@ -363,7 +364,7 @@ export const geminiService = {
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
-      return extractJson(response.text);
+      return extractJson(response.text, null);
     } catch (error) {
       console.error("Define Term Error:", error);
       return null;
@@ -381,7 +382,7 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text);
+      return extractJson(response.text, null);
     } catch (error) {
       console.error("Fetch Details Error:", error);
       return null;
