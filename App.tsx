@@ -33,23 +33,23 @@ const App: React.FC = () => {
   const [aiConfig, setAIConfig] = useState<AIConfig>(dbService.getAIConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('disconnected');
   const [showFeedback, setShowFeedback] = useState(false);
-  const [showSyncKey, setShowSyncKey] = useState(false);
-  const [inputSyncKey, setInputSyncKey] = useState('');
-  const [isProcessingBooks, setIsProcessingBooks] = useState(false);
   const [isSyncingScholar, setIsSyncingScholar] = useState(false);
   const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
-  const [showImportBooks, setShowImportBooks] = useState(false);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
   const [showSynthesisModal, setShowSynthesisModal] = useState(false);
   const [networkFocusId, setNetworkFocusId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
-  const [filterSentiment, setFilterSentiment] = useState<Sentiment | 'All'>('All');
 
   useEffect(() => {
-    const handleUpdate = () => setData(dbService.getData());
+    const handleUpdate = () => {
+      const updatedData = dbService.getData();
+      setData(updatedData);
+      setInterests(dbService.getInterests());
+      setFeeds(dbService.getFeeds());
+      setAIConfig(dbService.getAIConfig());
+    };
     window.addEventListener('db-update', handleUpdate);
     return () => window.removeEventListener('db-update', handleUpdate);
   }, []);
@@ -135,12 +135,7 @@ const App: React.FC = () => {
       }
     } catch (err: any) {
       dbService.addLog('error', `Scholar Sync failed: ${err.message || JSON.stringify(err)}`);
-      if (err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED")) {
-        alert("Quota exceeded for Free Tier. Please wait a minute or connect a Paid API Key for unrestricted research.");
-        setShowApiKeyDialog(true);
-      } else {
-        alert("Failed to connect to search service. Check System Logs.");
-      }
+      alert("Scholar Sync failed. Check System Logs.");
     } finally {
       setIsSyncingScholar(false);
     }
@@ -161,7 +156,7 @@ const App: React.FC = () => {
 
   const handleUpdateSocialProfiles = (newProfiles: SocialProfiles) => {
     dbService.saveSocialProfiles(newProfiles);
-    setData({ ...data, socialProfiles: newProfiles });
+    setData({ ...dbService.getData() });
   };
 
   const handleOpenReader = (article: Article) => {
@@ -169,11 +164,51 @@ const App: React.FC = () => {
     setCurrentTab('reader');
   };
 
+  const handleExportData = () => {
+    const backup = dbService.exportFullBackup();
+    exportService.downloadFile(backup, `scidigest_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+  };
+
+  const handleImportData = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event: any) => {
+        const result = dbService.importFullBackup(event.target.result);
+        if (result.success) {
+          setData(dbService.getData());
+          alert("Import successful!");
+        } else {
+          alert("Import failed. Invalid file.");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
-      <Sidebar currentTab={currentTab} setTab={setCurrentTab} onOpenFeedback={() => setShowFeedback(true)} syncStatus={syncStatus} />
+      <Sidebar 
+        currentTab={currentTab} 
+        setTab={setCurrentTab} 
+        onOpenFeedback={() => setShowFeedback(true)} 
+        syncStatus={syncStatus} 
+      />
+      
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
-      {showSynthesisModal && <SynthesisModal articles={data.articles.filter(a => selectedArticleIds.includes(a.id))} notes={data.notes.filter(n => n.articleIds.some(aid => selectedArticleIds.includes(aid)))} onClose={() => setShowSynthesisModal(false)} />}
+      
+      {showSynthesisModal && (
+        <SynthesisModal 
+          articles={data.articles.filter(a => selectedArticleIds.includes(a.id))} 
+          notes={data.notes.filter(n => n.articleIds.some(aid => selectedArticleIds.includes(aid)))} 
+          onClose={() => setShowSynthesisModal(false)} 
+        />
+      )}
+      
       {showApiKeyDialog && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center space-y-6">
@@ -184,24 +219,224 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
-      <main className="flex-1 ml-64 p-8">
-        <div className="max-w-6xl mx-auto">
-          {currentTab === 'feed' && <FeedMonitor ratedArticles={data.articles} books={data.books} onAdd={(a) => setData(dbService.addArticle(a))} onRead={handleOpenReader} activeFeeds={feeds.filter(f => f.active)} aiConfig={aiConfig} />}
-          {currentTab === 'academy' && <Academy articles={data.articles} totalReadTime={data.totalReadTime} onNavigate={setCurrentTab} onRead={handleOpenReader} />}
+
+      <main className="flex-1 ml-64 p-8 min-h-screen">
+        <div className="max-w-6xl mx-auto pb-20">
+          {currentTab === 'feed' && (
+            <FeedMonitor 
+              ratedArticles={data.articles} 
+              books={data.books} 
+              onAdd={(a) => setData(dbService.addArticle(a))} 
+              onRead={handleOpenReader} 
+              activeFeeds={feeds.filter(f => f.active)} 
+              aiConfig={aiConfig} 
+            />
+          )}
+
+          {currentTab === 'tracker' && (
+            <Tracker 
+              onAdd={(a) => setData(dbService.addArticle(a))} 
+              onRead={handleOpenReader} 
+            />
+          )}
+
+          {currentTab === 'trending' && (
+            <TrendingSection 
+              interests={interests} 
+              onAdd={(a) => setData(dbService.addArticle(a))} 
+              onRead={handleOpenReader} 
+            />
+          )}
+
+          {currentTab === 'shelves' && (
+            <ShelvesSection 
+              articles={data.articles} 
+              books={data.books} 
+              shelves={data.shelves} 
+              onUpdateArticle={handleUpdateArticle} 
+              onUpdateBook={handleUpdateBook}
+              onUpdateShelves={(sh) => setData({ ...data, shelves: sh })}
+              onRead={handleOpenReader} 
+              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
+              allNotes={data.notes}
+            />
+          )}
+
+          {currentTab === 'reader' && activeReadingArticle && (
+            <Reader 
+              article={activeReadingArticle} 
+              notes={data.notes} 
+              onNavigateToLibrary={() => setCurrentTab('library')} 
+              onUpdateNote={(id, up) => setData(dbService.updateNote(id, up))} 
+              onCreateNote={(n) => setData(dbService.addNote(n))} 
+              onUpdateArticle={handleUpdateArticle} 
+              onAddReadTime={(id, s) => setData(dbService.addReadTime(id, s))} 
+            />
+          )}
+
           {currentTab === 'library' && (
-            <div className="space-y-6">
+            <div className="space-y-8 animate-in fade-in duration-500">
               <header className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-slate-100">Library</h2>
-                <button onClick={handleSyncScholarArticles} disabled={isSyncingScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">{isSyncingScholar ? 'Syncing...' : '🎓 Sync Scholar'}</button>
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-100">Research Library</h2>
+                  <p className="text-slate-400 mt-1">Managed ingestion of scientific literature.</p>
+                </div>
+                <button onClick={handleSyncScholarArticles} disabled={isSyncingScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">{isSyncingScholar ? 'Syncing...' : '🎓 Sync Scholar'}</button>
               </header>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {data.articles.map(a => <ArticleCard key={a.id} article={a} allNotes={data.notes} onUpdate={handleUpdateArticle} onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} onRead={() => handleOpenReader(a)} />)}
-              </div>
+              {data.articles.length === 0 ? (
+                <div className="py-24 text-center bg-slate-900/50 rounded-[2.5rem] border-2 border-dashed border-slate-800">
+                  <span className="text-6xl mb-6 block">📚</span>
+                  <h3 className="text-xl font-bold text-slate-300">Library Empty</h3>
+                  <p className="text-slate-500 mt-2 max-w-sm mx-auto">Discover papers in the Feed or sync from Google Scholar to populate your research flight deck.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {data.articles.map(a => (
+                    <ArticleCard 
+                      key={a.id} 
+                      article={a} 
+                      allNotes={data.notes} 
+                      onUpdate={handleUpdateArticle} 
+                      onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
+                      onRead={() => handleOpenReader(a)} 
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
-          {currentTab === 'reader' && activeReadingArticle && <Reader article={activeReadingArticle} notes={data.notes} onNavigateToLibrary={() => setCurrentTab('library')} onUpdateNote={(id, up) => setData(dbService.updateNote(id, up))} onCreateNote={(n) => setData(dbService.addNote(n))} onUpdateArticle={handleUpdateArticle} onAddReadTime={(id, s) => setData(dbService.addReadTime(id, s))} />}
-          {currentTab === 'topics' && <div className="space-y-6"><h2 className="text-3xl font-bold">Topics</h2><InterestsManager interests={interests} onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} socialProfiles={data.socialProfiles} onUpdateSocialProfiles={handleUpdateSocialProfiles} /></div>}
-          {currentTab === 'settings' && <SettingsSection aiConfig={aiConfig} onUpdateAIConfig={(c) => { setAIConfig(c); dbService.saveAIConfig(c); }} interests={interests} onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} socialProfiles={data.socialProfiles} onUpdateSocialProfiles={handleUpdateSocialProfiles} />}
+
+          {currentTab === 'notes' && (
+            <NotesSection 
+              notes={data.notes} 
+              articles={data.articles} 
+              activeNoteId={activeNoteId} 
+              setActiveNoteId={setActiveNoteId} 
+              onUpdate={(id, up) => setData(dbService.updateNote(id, up))} 
+              onCreate={() => {
+                const newNote: Note = { 
+                  id: Math.random().toString(36).substr(2, 9), 
+                  title: 'Untitled Note', 
+                  content: '', 
+                  articleIds: [], 
+                  lastEdited: new Date().toISOString() 
+                };
+                dbService.addNote(newNote);
+                setActiveNoteId(newNote.id);
+                window.dispatchEvent(new CustomEvent('db-update'));
+              }} 
+              onDelete={(id) => {
+                dbService.deleteNote(id);
+                setActiveNoteId(null);
+                window.dispatchEvent(new CustomEvent('db-update'));
+              }} 
+              onNavigateToArticle={handleOpenReader}
+              onNavigateToNetwork={(nid) => { setNetworkFocusId(nid); setCurrentTab('networks'); }} 
+            />
+          )}
+
+          {currentTab === 'academy' && (
+            <Academy 
+              articles={data.articles} 
+              totalReadTime={data.totalReadTime} 
+              onNavigate={setCurrentTab} 
+              onRead={handleOpenReader} 
+            />
+          )}
+
+          {currentTab === 'networks' && (
+            <NetworkGraph 
+              articles={data.articles} 
+              notes={data.notes} 
+              books={data.books} 
+              focusNodeId={networkFocusId} 
+              onClearFocus={() => setNetworkFocusId(null)} 
+              onUpdateArticle={handleUpdateArticle} 
+              onNavigateToArticle={handleOpenReader} 
+              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
+            />
+          )}
+
+          {currentTab === 'topics' && (
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <header>
+                <h2 className="text-3xl font-bold">Research Trajectories</h2>
+                <p className="text-slate-400 mt-1">Define the domains and authors your assistant monitors.</p>
+              </header>
+              <InterestsManager 
+                interests={interests} 
+                onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
+                socialProfiles={data.socialProfiles} 
+                onUpdateSocialProfiles={handleUpdateSocialProfiles} 
+              />
+            </div>
+          )}
+
+          {currentTab === 'feeds' && (
+            <FeedsSection 
+              feeds={feeds} 
+              onUpdateFeeds={(nf) => { setFeeds(nf); dbService.saveFeeds(nf); }} 
+            />
+          )}
+
+          {currentTab === 'portability' && (
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <header>
+                <h2 className="text-3xl font-bold">Data & Privacy</h2>
+                <p className="text-slate-400 mt-1">Manage your research trajectory backups and cloud synchronization.</p>
+              </header>
+              <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 space-y-10 shadow-xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                       <span>💾</span> Local Portability
+                    </h3>
+                    <p className="text-sm text-slate-500 leading-relaxed">
+                      Download your entire trajectory including ratings, research networks, and notes as a single encrypted JSON file. Use this to move between browser profiles or for long-term archival.
+                    </p>
+                    <div className="flex gap-4 pt-4">
+                      <button onClick={handleExportData} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/20">Export Backup</button>
+                      <button onClick={handleImportData} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 rounded-2xl border border-slate-700">Import File</button>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                       <span>☁️</span> Cloud Identity
+                    </h3>
+                    <p className="text-sm text-slate-500 leading-relaxed">
+                      Enable end-to-end encrypted synchronization. Your research is encrypted client-side using your private sync key before being stored in a hidden app-specific folder on your Google Drive.
+                    </p>
+                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between mt-4">
+                      <div className="flex items-center gap-3">
+                        <span className={`w-3 h-3 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></span>
+                        <span className="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">{syncStatus}</span>
+                      </div>
+                      <button 
+                        onClick={() => cloudSyncService.signIn((s) => { if(s) setSyncStatus('synced'); })} 
+                        className="text-[10px] font-black text-indigo-400 hover:text-white uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-xl transition-all"
+                      >
+                        {syncStatus === 'disconnected' ? 'Initialize Cloud' : 'Refresh Auth'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {currentTab === 'settings' && (
+            <SettingsSection 
+              aiConfig={aiConfig} 
+              onUpdateAIConfig={(c) => { setAIConfig(c); dbService.saveAIConfig(c); }} 
+              interests={interests} 
+              onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
+              socialProfiles={data.socialProfiles} 
+              onUpdateSocialProfiles={handleUpdateSocialProfiles} 
+            />
+          )}
+
+          {currentTab === 'guide' && <GuideSection />}
+          {currentTab === 'version' && <VersionSection />}
           {currentTab === 'logs' && <LogSection logs={data.logs} onClear={() => { dbService.clearLogs(); setData(dbService.getData()); }} />}
         </div>
       </main>
