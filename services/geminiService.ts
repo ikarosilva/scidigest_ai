@@ -372,8 +372,9 @@ export const geminiService = {
       
       const result = extractJson(response.text || '[]');
       return Array.isArray(result) ? result : [];
-    } catch (error) {
-      console.error("Fetch Scholar Articles Error:", error);
+    } catch (error: any) {
+      // Enhanced debug logging for Search Grounding
+      console.error("Fetch Scholar Articles Gemini Error:", error);
       throw error;
     }
   },

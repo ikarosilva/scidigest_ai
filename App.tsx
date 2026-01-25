@@ -18,6 +18,7 @@ import SynthesisModal from './components/SynthesisModal';
 import InterestsManager from './components/InterestsManager';
 import VersionSection from './components/VersionSection';
 import LogSection from './components/LogSection';
+import GuideSection from './components/GuideSection';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
@@ -214,11 +215,13 @@ const App: React.FC = () => {
     }
     
     setIsSyncingScholar(true);
+    dbService.addLog('info', 'Scholar Sync initiated: Requesting grounding via Gemini 3.');
 
     try {
       const scholarPapers = await geminiService.fetchScholarArticles(currentProfiles);
       
       if (!scholarPapers || scholarPapers.length === 0) {
+        dbService.addLog('warning', 'Scholar Sync: No papers returned by AI model.');
         alert("No publications found. Try refining your name or ensuring the profile URL is correct.");
         return;
       }
@@ -258,19 +261,23 @@ const App: React.FC = () => {
       if (newArticles.length > 0) {
         const updatedData = dbService.addArticles(newArticles);
         setData({ ...updatedData });
+        dbService.addLog('info', `Scholar Sync: Successfully imported ${newArticles.length} new publications.`);
         alert(`Successfully imported ${newArticles.length} new publications!`);
         if (syncStatus === 'synced') performCloudSync(updatedData);
       } else {
+        dbService.addLog('info', 'Scholar Sync: Library already up to date.');
         alert("Your library is already up to date with your profile.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Scholar Sync Critical Error:", err);
-      dbService.addLog('error', `Scholar Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const errorMsg = err instanceof Error ? err.message : JSON.stringify(err);
+      dbService.addLog('error', `Scholar Sync failed. Details: ${errorMsg}`);
+      
       if (err instanceof Error && err.message.includes("Requested entity was not found")) {
-        alert("Your API key configuration appears invalid. Please reconnect.");
+        alert("Your API key configuration appears invalid or the selected model is not available for this key. Please reconnect.");
         setShowApiKeyDialog(true);
       } else {
-        alert("Failed to connect to search service. Ensure your profile is public and Google Search Grounding is available.");
+        alert("Failed to connect to search service. Ensure your profile is public and Google Search Grounding is available. Check System Logs for detailed error info.");
       }
     } finally {
       setIsSyncingScholar(false);
@@ -713,6 +720,8 @@ const App: React.FC = () => {
           {currentTab === 'version' && <VersionSection />}
 
           {currentTab === 'logs' && <LogSection logs={data.logs} onClear={handleClearLogs} />}
+          
+          {currentTab === 'guide' && <GuideSection />}
 
           {currentTab === 'portability' && (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

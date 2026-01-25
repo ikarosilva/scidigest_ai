@@ -130,6 +130,8 @@ export const dbService = {
   saveData: (data: AppState) => {
     data.lastModified = new Date().toISOString();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // Dispatch event so App state and other components can refresh
+    window.dispatchEvent(new CustomEvent('db-update'));
   },
   addLog: (type: 'error' | 'warning' | 'info', message: string) => {
     const data = dbService.getData();
