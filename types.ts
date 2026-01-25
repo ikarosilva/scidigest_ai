@@ -12,13 +12,9 @@ export enum FeedSourceType {
 }
 
 export type Sentiment = 'Positive' | 'Neutral' | 'Negative' | 'Unknown';
-
 export type SyncStatus = 'disconnected' | 'synced' | 'syncing' | 'error' | 'update-available';
-
 export type RecommendationBias = 'conservative' | 'balanced' | 'experimental';
-
 export type QuizStatus = 'not-taken' | 'pass' | 'fail';
-
 export type ReadingMode = 'default' | 'paper' | 'night';
 
 export interface LogEntry {
@@ -31,7 +27,7 @@ export interface LogEntry {
 export interface AIConfig {
   recommendationBias: RecommendationBias;
   reviewer2Prompt: string;
-  feedbackUrl: string; // New: Configurable URL for issue reporting
+  feedbackUrl: string;
 }
 
 export interface UserReviews {
@@ -78,6 +74,7 @@ export interface Article {
   title: string;
   authors: string[];
   abstract: string;
+  quickTake?: string; // New: 1-sentence summary
   date: string;
   year: string;
   source: FeedSourceType;
@@ -91,11 +88,11 @@ export interface Article {
   notes: string;
   noteIds: string[];
   references?: string[]; 
-  userReadTime: number; // In seconds
-  estimatedReadTime?: number; // In minutes
-  shelfIds: string[]; // Replaces isInQueue
+  userReadTime: number;
+  estimatedReadTime?: number;
+  shelfIds: string[];
   quizStatus?: QuizStatus;
-  isTracked?: boolean; // New: Tracking forward citations
+  isTracked?: boolean;
 }
 
 export interface Book {
@@ -106,7 +103,7 @@ export interface Book {
   dateAdded: string;
   price?: string;
   amazonUrl?: string;
-  shelfIds: string[]; // Replaces isInQueue
+  shelfIds: string[];
   description?: string;
   tags?: string[];
 }
@@ -122,8 +119,8 @@ export interface AppState {
   aiConfig: AIConfig;
   totalReadTime: number;
   socialProfiles: SocialProfiles;
-  trackedAuthors: string[]; // New: List of authors to monitor
-  logs: LogEntry[]; // New: System circular log buffer
+  trackedAuthors: string[];
+  logs: LogEntry[];
 }
 
 export type NetworkViewMode = 'notes' | 'articles' | 'topics' | 'unified' | 'datasets' | 'author';
