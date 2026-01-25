@@ -25,6 +25,47 @@ const extractJson = (text: string, fallback: any = []) => {
 
 export const geminiService = {
   /**
+   * Defines a scientific term with technical nuance.
+   */
+  async defineScientificTerm(term: string, contextPaperTitle?: string) {
+    const ai = getAI();
+    const prompt = `Define the scientific/technical term: "${term}".
+    ${contextPaperTitle ? `Context: This term appears in a paper titled "${contextPaperTitle}".` : ''}
+    
+    Return a JSON object:
+    {
+      "term": string,
+      "definition": string (concise, technical),
+      "researchContext": string (how it is used in modern literature),
+      "relatedTopics": string[] (3-5 related scientific concepts)
+    }`;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              term: { type: Type.STRING },
+              definition: { type: Type.STRING },
+              researchContext: { type: Type.STRING },
+              relatedTopics: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["term", "definition", "researchContext", "relatedTopics"]
+          }
+        }
+      });
+      return extractJson(response.text || '{}', null);
+    } catch (error) {
+      console.error("Lexicon Error:", error);
+      return null;
+    }
+  },
+
+  /**
    * Performs cross-document synthesis on a collection of articles and notes.
    */
   async synthesizeResearch(articles: Article[], notes: string[]) {

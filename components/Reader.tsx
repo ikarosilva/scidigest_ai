@@ -20,12 +20,19 @@ interface QuizQuestion {
   correctIndex: number;
 }
 
+interface LexiconEntry {
+  term: string;
+  definition: string;
+  researchContext: string;
+  relatedTopics: string[];
+}
+
 const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, onUpdateNote, onCreateNote, onUpdateArticle, onAddReadTime }) => {
   const [markdown, setMarkdown] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'reviewer' | 'quiz' | 'citations'>('notes');
+  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'lexicon' | 'reviewer' | 'quiz' | 'citations'>('notes');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   
@@ -37,6 +44,12 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   
   const [aiDetection, setAiDetection] = useState<{ probability: number, assessment: string, markers: string[] } | null>(null);
   const [isDetectingAI, setIsDetectingAI] = useState(false);
+
+  // Lexicon State
+  const [lexiconSearch, setLexiconSearch] = useState('');
+  const [isLexiconLoading, setIsLexiconLoading] = useState(false);
+  const [lexiconResult, setLexiconResult] = useState<LexiconEntry | null>(null);
+  const [lexiconHistory, setLexiconHistory] = useState<LexiconEntry[]>([]);
 
   // Rabbit Hole State
   const [enteringRabbitHole, setEnteringRabbitHole] = useState(false);
@@ -63,6 +76,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       setUserAnswers({});
       setQuizStep('intro');
       setQuizScore(null);
+      setLexiconResult(null);
       timerRef.current = window.setInterval(() => {
         setSessionSeconds(prev => prev + 1);
       }, 1000);
@@ -118,6 +132,33 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       };
       onCreateNote(newNote);
       setActiveNoteId(newNoteId);
+    }
+  };
+
+  const handleLexiconLookup = async (term?: string) => {
+    const target = term || lexiconSearch;
+    if (!target.trim() || !article) return;
+
+    setIsLexiconLoading(true);
+    try {
+      const result = await geminiService.defineScientificTerm(target, article.title);
+      if (result) {
+        setLexiconResult(result);
+        setLexiconHistory(prev => [result, ...prev.filter(h => h.term !== result.term)].slice(0, 10));
+        setSidebarTab('lexicon');
+        setIsSidebarOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLexiconLoading(false);
+    }
+  };
+
+  const handleTextareaSelect = () => {
+    const selection = window.getSelection()?.toString().trim();
+    if (selection && selection.length < 50) {
+      setLexiconSearch(selection);
     }
   };
 
@@ -362,6 +403,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const tabButtons = [
     { id: 'notes', label: 'Notes', icon: '✍️', color: 'indigo' },
     { id: 'intel', label: 'Intel', icon: '📡', color: 'emerald' },
+    { id: 'lexicon', label: 'Lexicon', icon: '📖', color: 'indigo' },
     { id: 'citations', label: 'Rabbit Hole', icon: '🐇', color: 'indigo' },
     { id: 'reviewer', label: 'Reviewer 2', icon: '👿', color: 'red' },
     { id: 'quiz', label: 'Quiz', icon: '🎓', color: 'indigo' },
@@ -464,9 +506,82 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                   <textarea
                     value={markdown}
                     onChange={handleMarkdownChange}
+                    onSelect={handleTextareaSelect}
                     placeholder="Start typing your Markdown annotations here..."
                     className={`w-full h-full p-6 text-sm outline-none border-none resize-none font-mono leading-relaxed transition-colors duration-500 bg-transparent ${getTextClasses()}`}
                   />
+                )}
+
+                {sidebarTab === 'lexicon' && (
+                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Quick Term Lookup</label>
+                       <div className="flex gap-2">
+                          <input 
+                            type="text"
+                            value={lexiconSearch}
+                            onChange={(e) => setLexiconSearch(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleLexiconLookup()}
+                            placeholder="Type or select from notes..."
+                            className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <button 
+                            onClick={() => handleLexiconLookup()}
+                            disabled={isLexiconLoading}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase px-4 rounded-xl shadow-lg transition-all"
+                          >
+                            {isLexiconLoading ? '...' : '🔍'}
+                          </button>
+                       </div>
+                       <p className="text-[9px] text-slate-600 italic">Tip: Selecting text in your notes will auto-fill this box.</p>
+                    </div>
+
+                    {lexiconResult ? (
+                      <div className="bg-slate-950/40 border border-indigo-500/20 rounded-2xl p-6 space-y-4 animate-in zoom-in-95 duration-300 shadow-inner">
+                         <div className="flex justify-between items-start">
+                            <h4 className="text-lg font-black text-indigo-400 tracking-tight">{lexiconResult.term}</h4>
+                            <span className="text-[8px] bg-indigo-500/20 text-indigo-500 px-2 py-0.5 rounded font-black uppercase tracking-widest">Scientific Definition</span>
+                         </div>
+                         <p className={`text-xs leading-relaxed font-serif ${getTextClasses()}`}>{lexiconResult.definition}</p>
+                         <div className="pt-3 border-t border-slate-800">
+                            <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-2">Research Context</span>
+                            <p className="text-[11px] text-slate-400 italic leading-relaxed">{lexiconResult.researchContext}</p>
+                         </div>
+                         <div className="pt-3">
+                            <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest block mb-2">Related Vectors</span>
+                            <div className="flex flex-wrap gap-2">
+                               {lexiconResult.relatedTopics.map(t => (
+                                 <button key={t} onClick={() => handleLexiconLookup(t)} className="text-[9px] bg-slate-900 border border-slate-800 text-slate-500 px-2 py-1 rounded hover:border-indigo-500 transition-colors">
+                                   {t}
+                                 </button>
+                               ))}
+                            </div>
+                         </div>
+                      </div>
+                    ) : !isLexiconLoading && (
+                      <div className="text-center py-12 opacity-30">
+                        <span className="text-4xl block mb-4">📖</span>
+                        <p className="text-xs">Enter a technical term to see its scientific blueprint.</p>
+                      </div>
+                    )}
+
+                    {lexiconHistory.length > 1 && (
+                      <div className="space-y-3 mt-8">
+                         <span className="text-[10px] font-black uppercase text-slate-600 tracking-widest">Recent Lexicon Queries</span>
+                         <div className="flex flex-col gap-2">
+                            {lexiconHistory.slice(1).map((h, i) => (
+                              <button 
+                                key={i} 
+                                onClick={() => setLexiconResult(h)}
+                                className="text-left p-3 rounded-xl bg-slate-900/40 border border-slate-800 hover:border-slate-700 transition-all group"
+                              >
+                                <span className="text-[11px] font-bold text-slate-400 group-hover:text-indigo-400">{h.term}</span>
+                              </button>
+                            ))}
+                         </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {sidebarTab === 'citations' && (
