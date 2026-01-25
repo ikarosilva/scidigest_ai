@@ -25,6 +25,7 @@ You are acting as a world-class senior frontend engineer and research assistant 
 ## 🛠 Error Handling & Communication
 - **Error Diagnosis**: When build or log errors are pasted into the chat, always provide a brief explanation of the root cause.
 - **Fix Explanation**: Briefly explain the logic used to resolve the error alongside the provided code updates.
+- **Test Robustness**: When writing tests for UI elements that share text (e.g., 'Insights' appearing as both a tab and a group label), use specific queries like `screen.getAllByText` or role-based queries to avoid "multiple elements found" errors.
 
 ## 📝 Coding Style
 - Keep updates minimal and focused on the user request.

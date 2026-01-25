@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -21,7 +20,8 @@ describe('Sidebar Component', () => {
     expect(screen.getByText('SciDigest')).toBeInTheDocument();
     expect(screen.getByText('Discovery')).toBeInTheDocument();
     expect(screen.getByText('Workspace')).toBeInTheDocument();
-    expect(screen.getByText('Insights')).toBeInTheDocument();
+    // Using getAllByText because "Insights" appears as both a group label and a dashboard tab label
+    expect(screen.getAllByText('Insights').length).toBeGreaterThan(0);
     expect(screen.getByText('Help')).toBeInTheDocument();
   });
 
