@@ -27,12 +27,17 @@ interface LexiconEntry {
   relatedTopics: string[];
 }
 
+interface ChatMessage {
+  role: 'user' | 'model';
+  parts: [{ text: string }];
+}
+
 const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, onUpdateNote, onCreateNote, onUpdateArticle, onAddReadTime }) => {
   const [markdown, setMarkdown] = useState('');
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [isMaximized, setIsMaximized] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
-  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'lexicon' | 'reviewer' | 'quiz' | 'citations'>('notes');
+  const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'lexicon' | 'whatif' | 'reviewer' | 'quiz' | 'citations'>('notes');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   
@@ -50,6 +55,12 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [isLexiconLoading, setIsLexiconLoading] = useState(false);
   const [lexiconResult, setLexiconResult] = useState<LexiconEntry | null>(null);
   const [lexiconHistory, setLexiconHistory] = useState<LexiconEntry[]>([]);
+
+  // What If State
+  const [whatIfInput, setWhatIfInput] = useState('');
+  const [whatIfMessages, setWhatIfMessages] = useState<ChatMessage[]>([]);
+  const [isWhatIfLoading, setIsWhatIfLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Rabbit Hole State
   const [enteringRabbitHole, setEnteringRabbitHole] = useState(false);
@@ -77,6 +88,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       setQuizStep('intro');
       setQuizScore(null);
       setLexiconResult(null);
+      setWhatIfMessages([]);
       timerRef.current = window.setInterval(() => {
         setSessionSeconds(prev => prev + 1);
       }, 1000);
@@ -88,6 +100,10 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       }
     };
   }, [article?.id]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [whatIfMessages]);
 
   useEffect(() => {
     return () => {
@@ -153,6 +169,42 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     } finally {
       setIsLexiconLoading(false);
     }
+  };
+
+  const handleWhatIfSend = async () => {
+    if (!whatIfInput.trim() || !article || isWhatIfLoading) return;
+
+    const userMsg = whatIfInput;
+    setWhatIfInput('');
+    setWhatIfMessages(prev => [...prev, { role: 'user', parts: [{ text: userMsg }] }]);
+    setIsWhatIfLoading(true);
+
+    try {
+      const response = await geminiService.whatIfAssistant(userMsg, whatIfMessages, article);
+      setWhatIfMessages(prev => [...prev, { role: 'model', parts: [{ text: response || '...' }] }]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsWhatIfLoading(false);
+    }
+  };
+
+  const handleSaveWhatIfAsNote = () => {
+    if (!article || whatIfMessages.length === 0) return;
+    
+    const discussion = whatIfMessages.map(m => `**${m.role === 'user' ? 'Researcher' : 'Colleague'}**: ${m.parts[0].text}`).join('\n\n');
+    const newNoteId = Math.random().toString(36).substr(2, 9);
+    const newNote: Note = {
+      id: newNoteId,
+      title: `What If Study: ${article.title.substring(0, 30)}...`,
+      content: `### Hypothetical Scenario Discussion\n\n${discussion}`,
+      articleIds: [article.id],
+      lastEdited: new Date().toISOString()
+    };
+    
+    onCreateNote(newNote);
+    dbService.linkNoteToArticle(newNoteId, article.id);
+    alert("Colleague discussion saved to Research Notes.");
   };
 
   const handleTextareaSelect = () => {
@@ -404,6 +456,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     { id: 'notes', label: 'Notes', icon: '✍️', color: 'indigo' },
     { id: 'intel', label: 'Intel', icon: '📡', color: 'emerald' },
     { id: 'lexicon', label: 'Lexicon', icon: '📖', color: 'indigo' },
+    { id: 'whatif', label: 'What If', icon: '💡', color: 'amber' },
     { id: 'citations', label: 'Rabbit Hole', icon: '🐇', color: 'indigo' },
     { id: 'reviewer', label: 'Reviewer 2', icon: '👿', color: 'red' },
     { id: 'quiz', label: 'Quiz', icon: '🎓', color: 'indigo' },
@@ -581,6 +634,73 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                          </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {sidebarTab === 'whatif' && (
+                  <div className="flex flex-col h-full bg-slate-950/20">
+                     <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest italic">Exploring Hypotheticals</p>
+                        <button 
+                          onClick={handleSaveWhatIfAsNote}
+                          disabled={whatIfMessages.length === 0}
+                          className="text-[9px] bg-amber-500/10 text-amber-500 px-2 py-1 rounded border border-amber-500/20 hover:bg-amber-500/20 disabled:opacity-30"
+                        >
+                          Save to Notes
+                        </button>
+                     </div>
+                     
+                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {whatIfMessages.length === 0 && (
+                          <div className="text-center py-12 opacity-40">
+                             <span className="text-4xl block mb-4">💡</span>
+                             <p className="text-xs max-w-[200px] mx-auto">Ask your colleague hypothetical "What if" questions about the paper's methodology or results.</p>
+                          </div>
+                        )}
+                        {whatIfMessages.map((msg, idx) => (
+                          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                             <div className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed ${
+                               msg.role === 'user' 
+                               ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg' 
+                               : 'bg-slate-800 text-slate-200 rounded-tl-none border border-slate-700'
+                             }`}>
+                                {msg.parts[0].text}
+                             </div>
+                          </div>
+                        ))}
+                        {isWhatIfLoading && (
+                          <div className="flex justify-start">
+                             <div className="bg-slate-800 p-3 rounded-2xl rounded-tl-none border border-slate-700">
+                                <div className="flex gap-1">
+                                   <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce"></div>
+                                   <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                   <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                                </div>
+                             </div>
+                          </div>
+                        )}
+                        <div ref={chatEndRef} />
+                     </div>
+
+                     <div className="p-4 border-t border-slate-800 bg-slate-950/50">
+                        <div className="flex gap-2 bg-slate-900 border border-slate-800 rounded-xl p-1 shadow-inner">
+                           <input 
+                             type="text"
+                             value={whatIfInput}
+                             onChange={(e) => setWhatIfInput(e.target.value)}
+                             onKeyDown={(e) => e.key === 'Enter' && handleWhatIfSend()}
+                             placeholder="What if we used X instead of Y?"
+                             className="flex-1 bg-transparent text-xs text-slate-200 p-2.5 outline-none"
+                           />
+                           <button 
+                             onClick={handleWhatIfSend}
+                             disabled={!whatIfInput.trim() || isWhatIfLoading}
+                             className="bg-amber-600 hover:bg-amber-700 text-white px-3 rounded-lg transition-all disabled:opacity-30 shadow-lg"
+                           >
+                              ➤
+                           </button>
+                        </div>
+                     </div>
                   </div>
                 )}
 

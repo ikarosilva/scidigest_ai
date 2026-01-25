@@ -25,6 +25,39 @@ const extractJson = (text: string, fallback: any = []) => {
 
 export const geminiService = {
   /**
+   * Colleague persona for exploring "What if" scenarios based on paper context.
+   */
+  async whatIfAssistant(message: string, history: { role: 'user' | 'model', parts: [{ text: string }] }[], article: Article) {
+    const ai = getAI();
+    const systemInstruction = `
+      You are a brilliant and highly technical research colleague. 
+      You are currently discussing the paper: "${article.title}".
+      Abstract: ${article.abstract}
+
+      The user wants to explore "What If" scenarios. 
+      - Be creative but scientifically grounded.
+      - If a hypothesis contradicts physical laws or established logic in the paper, point it out respectfully.
+      - Suggest potential experiments or data points that would validate the "What If" scenario.
+      - Keep responses concise, professional, and intellectually stimulating.
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [...history, { role: 'user', parts: [{ text: message }] }],
+        config: {
+          systemInstruction,
+          temperature: 0.8,
+        }
+      });
+      return response.text;
+    } catch (error) {
+      console.error("What If Chat Error:", error);
+      return "I'm having trouble processing that hypothesis. Let's try a different angle.";
+    }
+  },
+
+  /**
    * Defines a scientific term with technical nuance.
    */
   async defineScientificTerm(term: string, contextPaperTitle?: string) {
