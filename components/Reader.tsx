@@ -109,9 +109,10 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     setIsCritiquing(true);
     try {
       const result = await geminiService.critiqueArticle(article.title, article.abstract);
-      setCritique(result);
+      setCritique(result || "Could not generate critique.");
     } catch (err) {
       console.error(err);
+      setCritique("Error generating critique.");
     } finally {
       setIsCritiquing(false);
     }
@@ -328,7 +329,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
                         <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest animate-pulse">Scanning Linguistically...</p>
                      </div>
-                   ) : (
+                   ) : aiDetection && (
                      <div className="bg-slate-950 p-5 rounded-2xl border border-amber-500/20 space-y-3 relative group">
                         <button 
                           onClick={() => setAiDetection(null)}

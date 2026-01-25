@@ -186,7 +186,6 @@ export const geminiService = {
 
   async fetchScholarArticles(profiles: SocialProfiles): Promise<Partial<Article>[]> {
     const targetIdentity = profiles.googleScholar || profiles.name;
-    console.log("Triggering fetchScholarArticles for:", targetIdentity);
     const ai = getAI();
     
     const prompt = `CRITICAL TASK: Use the googleSearch tool to access the official Google Scholar profile for: "${targetIdentity}". 
@@ -231,7 +230,6 @@ export const geminiService = {
         }
       });
       const result = JSON.parse(response.text || '[]');
-      console.log("Scholar Sync Result Count:", result.length);
       return result;
     } catch (error) {
       console.error("Fetch Scholar Articles Error:", error);
@@ -409,7 +407,7 @@ export const geminiService = {
       });
       const result = JSON.parse(response.text || '{}');
       return {
-        sentiment: result.sentiment as Sentiment || 'Unknown',
+        sentiment: (result.sentiment as Sentiment) || 'Unknown',
         summary: result.summary || 'Analysis complete.',
         citationCount: result.citationCount,
         citedByUrl: result.citedByUrl,
