@@ -26,6 +26,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [isMaximized, setIsMaximized] = useState(false);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [sidebarTab, setSidebarTab] = useState<'notes' | 'intel' | 'reviewer' | 'quiz' | 'citations'>('notes');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   
   const [critique, setCritique] = useState<string | null>(null);
@@ -280,6 +281,15 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     setIsMaximized(!isMaximized);
   };
 
+  const handleTabToggle = (tab: typeof sidebarTab) => {
+    if (sidebarTab === tab) {
+      setIsSidebarOpen(!isSidebarOpen);
+    } else {
+      setSidebarTab(tab);
+      setIsSidebarOpen(true);
+    }
+  };
+
   const formatTime = (totalSeconds: number) => {
     const mins = Math.floor(totalSeconds / 60);
     const secs = totalSeconds % 60;
@@ -319,10 +329,8 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
-  // Fix: Defined missing containerClasses variable
   const containerClasses = `flex flex-col h-full space-y-4 animate-in fade-in duration-500 ${isMaximized ? 'fixed inset-0 z-[100] p-8 bg-slate-950' : ''}`;
 
-  // Fix: Added early return if no article is selected to avoid runtime property access errors
   if (!article) {
     return (
       <div className="h-full flex flex-col items-center justify-center text-center p-10 opacity-50">
@@ -334,12 +342,20 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     );
   }
 
+  const tabButtons = [
+    { id: 'notes', label: 'Notes', icon: '✍️', color: 'indigo' },
+    { id: 'intel', label: 'Intel', icon: '📡', color: 'emerald' },
+    { id: 'citations', label: 'Rabbit Hole', icon: '🐇', color: 'indigo' },
+    { id: 'reviewer', label: 'Reviewer 2', icon: '👿', color: 'red' },
+    { id: 'quiz', label: 'Quiz', icon: '🎓', color: 'indigo' },
+  ] as const;
+
   return (
     <div className={containerClasses}>
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 font-black uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0">Research Reader</span>
+            <span className="text-[10px] bg-indigo-500/20 text-indigo-400 font-black uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0">Reader</span>
             <div className="flex items-center gap-3 ml-2 border-l border-slate-700 pl-3">
                <div className="flex items-center gap-1.5">
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Est. Read</span>
@@ -349,32 +365,26 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                   <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Session</span>
                   <span className="text-xs font-mono font-bold text-emerald-400">{formatTime(sessionSeconds)}</span>
                </div>
-               {article.quizStatus && article.quizStatus !== 'not-taken' && (
-                 <div className="flex items-center gap-1.5">
-                    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Quiz</span>
-                    <span className={`text-[10px] font-black uppercase ${article.quizStatus === 'pass' ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {article.quizStatus}
-                    </span>
-                 </div>
-               )}
             </div>
-            <h2 className="text-lg font-bold text-slate-100 truncate ml-auto">{article.title}</h2>
+            <h2 className="text-sm font-bold text-slate-100 truncate ml-auto opacity-70 italic">"{article.title}"</h2>
           </div>
+          
           <div className="flex items-center gap-4">
-             <p className="text-xs text-slate-500 truncate">{article.authors.join(', ')} • {article.year}</p>
-             <div className="flex items-center gap-1.5 ml-auto md:ml-0 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
-                <span className="text-[9px] font-black uppercase text-slate-500 tracking-tighter">My Rating</span>
-                <div className="flex items-center gap-1">
-                   {[...Array(10)].map((_, i) => (
-                      <button 
-                        key={i}
-                        onClick={() => onUpdateArticle(article.id, { rating: i + 1 })}
-                        className={`w-2.5 h-2.5 rounded-full transition-all ${i < article.rating ? 'bg-indigo-400' : 'bg-slate-700 hover:bg-slate-600'}`}
-                        title={`Rate ${i + 1}/10`}
-                      />
-                   ))}
-                   <span className="text-xs font-bold text-indigo-300 ml-1">{article.rating}</span>
-                </div>
+             <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+               {tabButtons.map(tab => (
+                 <button
+                   key={tab.id}
+                   onClick={() => handleTabToggle(tab.id)}
+                   className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
+                     isSidebarOpen && sidebarTab === tab.id 
+                       ? `bg-${tab.color}-600 text-white shadow-lg` 
+                       : 'text-slate-500 hover:text-slate-300'
+                   }`}
+                 >
+                   <span>{tab.icon}</span>
+                   <span className="hidden lg:inline">{tab.label}</span>
+                 </button>
+               ))}
              </div>
           </div>
         </div>
@@ -384,56 +394,302 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
              <button 
                onClick={() => setReadingMode('default')}
                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'default' ? 'bg-slate-700 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
-               title="Standard Dark Mode"
              >
                Normal
              </button>
              <button 
                onClick={() => setReadingMode('paper')}
                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'paper' ? 'bg-amber-100 text-amber-900 shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
-               title="Sepia Paper Mode"
              >
                Paper
              </button>
              <button 
                onClick={() => setReadingMode('night')}
                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${readingMode === 'night' ? 'bg-orange-950 text-orange-400 shadow-md border border-orange-500/30' : 'text-slate-500 hover:text-slate-300'}`}
-               title="Warm Night Mode"
              >
                Night
              </button>
           </div>
 
           <button 
-            onClick={handlePerplexityCrossCheck}
-            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-bold px-4 py-2.5 rounded-xl border border-emerald-500/20 transition-all flex items-center gap-2 group"
-          >
-            <span>🌐</span> Deep Check
-          </button>
-          <button 
             onClick={toggleMaximize}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold p-2.5 rounded-xl transition-all border border-slate-700 flex items-center gap-2 group"
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold p-2.5 rounded-xl transition-all border border-slate-700"
             title={isMaximized ? "Exit Maximize" : "Maximize Screen"}
           >
             {isMaximized ? "縮" : "全"}
           </button>
           <button 
             onClick={handleOpenExternal}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl transition-all border border-slate-800 flex items-center gap-2 group"
+            className="bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 text-xs font-bold px-4 py-2.5 rounded-xl transition-all border border-indigo-500/20 flex items-center gap-2"
           >
-            <span className="group-hover:rotate-12 transition-transform">🚀</span> Open in Host App
-          </button>
-          <button 
-            onClick={isMaximized ? toggleMaximize : onNavigateToLibrary}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-600/20"
-          >
-             {isMaximized ? 'Exit Maximize' : 'Close Reader'}
+            <span>🚀</span> Host App
           </button>
         </div>
       </header>
 
-      <div className="flex-1 flex gap-4 overflow-hidden">
-        <div className={`flex-[6] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative transition-colors duration-500 ${getReaderClasses()}`}>
+      <div className="flex-1 flex gap-4 overflow-hidden relative">
+        {/* Intelligence Side Window (Now on the LEFT) */}
+        <div 
+          className={`flex flex-col border border-slate-800 rounded-3xl overflow-hidden shadow-xl transition-all duration-300 ease-in-out ${
+            isSidebarOpen ? 'flex-[4] opacity-100' : 'w-0 opacity-0'
+          } ${getReaderClasses()}`}
+        >
+          {isSidebarOpen && (
+            <>
+              <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/50">
+                 <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {tabButtons.find(t => t.id === sidebarTab)?.label}
+                 </h3>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-600 hover:text-white transition-colors">✕</button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {sidebarTab === 'notes' && (
+                  <textarea
+                    value={markdown}
+                    onChange={handleMarkdownChange}
+                    placeholder="Start typing your Markdown annotations here..."
+                    className={`w-full h-full p-6 text-sm outline-none border-none resize-none font-mono leading-relaxed transition-colors duration-500 bg-transparent ${getTextClasses()}`}
+                  />
+                )}
+
+                {sidebarTab === 'citations' && (
+                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                    <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🐇</div>
+                        <div>
+                          <h4 className="text-sm font-bold text-indigo-400">Rabbit Hole Explorer</h4>
+                        </div>
+                      </div>
+                      {!article.references?.length && (
+                        <button 
+                          onClick={handleEnterRabbitHole}
+                          disabled={enteringRabbitHole}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all"
+                        >
+                          {enteringRabbitHole ? 'Diving...' : 'Enter Rabbit Hole'}
+                        </button>
+                      )}
+                    </header>
+
+                    {article.references?.length ? (
+                      <div className="space-y-3">
+                        {article.references.map((citation, idx) => {
+                          const match = findLibraryMatch(citation);
+                          const isIngesting = ingestingId === citation;
+                          
+                          return (
+                            <div key={idx} className={`p-4 rounded-2xl border transition-all ${match ? 'bg-indigo-600/10 border-indigo-500/30' : 'bg-slate-950/40 border-slate-800'}`}>
+                               <p className={`text-[11px] font-medium leading-relaxed mb-3 ${getTextClasses()}`}>{citation}</p>
+                               <div className="flex justify-between items-center">
+                                  {match ? (
+                                    <button 
+                                      onClick={() => alert(`Paper "${match.title}" is already in your library.`)}
+                                      className="text-[10px] bg-indigo-600 text-white font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg shadow-lg"
+                                    >
+                                      📖 In Library
+                                    </button>
+                                  ) : (
+                                    <button 
+                                      onClick={() => handleIngestCitation(citation)}
+                                      disabled={isIngesting}
+                                      className={`text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg transition-all ${isIngesting ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 text-indigo-400 hover:bg-indigo-500 hover:text-white'}`}
+                                    >
+                                      {isIngesting ? '🔍 Hydrating...' : '📥 Ingest'}
+                                    </button>
+                                  )}
+                               </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-20 opacity-40">
+                         <span className="text-4xl block mb-4">🕳️</span>
+                         <p className="text-xs">No path found yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {sidebarTab === 'quiz' && (
+                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                    {quizStep === 'intro' && (
+                      <div className="text-center py-12 space-y-6">
+                        <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center text-3xl mx-auto">🎓</div>
+                        <p className="text-xs text-slate-500 italic px-4 leading-relaxed">
+                          "Internalize the methodology through conceptual validation."
+                        </p>
+                        <button 
+                          onClick={handleGenerateQuiz}
+                          disabled={isGeneratingQuiz}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-8 rounded-2xl shadow-xl transition-all"
+                        >
+                          {isGeneratingQuiz ? "Constructing Exam..." : "Generate 10-Question Quiz"}
+                        </button>
+                      </div>
+                    )}
+
+                    {quizStep === 'active' && (
+                      <div className="space-y-8 animate-in fade-in duration-500">
+                        {quizQuestions.map((q, qIdx) => (
+                          <div key={qIdx} className="space-y-4">
+                            <p className={`text-xs font-bold leading-relaxed ${getTextClasses()}`}>
+                              <span className="text-indigo-500 mr-2">{qIdx + 1}.</span> {q.question}
+                            </p>
+                            <div className="grid grid-cols-1 gap-2">
+                              {q.options.map((opt, oIdx) => (
+                                <button
+                                  key={oIdx}
+                                  onClick={() => setUserAnswers(prev => ({ ...prev, [qIdx]: oIdx }))}
+                                  className={`text-left p-3 rounded-xl text-[11px] border transition-all ${
+                                    userAnswers[qIdx] === oIdx 
+                                    ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg' 
+                                    : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700'
+                                  }`}
+                                >
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <button 
+                          onClick={handleQuizFinish}
+                          disabled={Object.keys(userAnswers).length < 10}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 text-white font-black text-[10px] uppercase py-4 rounded-2xl"
+                        >
+                          Submit Examination
+                        </button>
+                      </div>
+                    )}
+
+                    {quizStep === 'results' && (
+                      <div className="text-center py-12 space-y-8 animate-in zoom-in-95 duration-300">
+                        <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto text-4xl shadow-2xl border-4 ${quizScore! >= 7 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-red-500/10 border-red-500 text-red-400'}`}>
+                           {quizScore! >= 7 ? '🏆' : '📚'}
+                        </div>
+                        <h3 className={`text-2xl font-black uppercase tracking-widest mt-4 ${quizScore! >= 7 ? 'text-emerald-400' : 'text-red-400'}`}>
+                           {quizScore! >= 7 ? 'PASSED' : 'FAILED'}
+                        </h3>
+                        <p className="text-sm font-bold text-slate-500">You scored {quizScore} / 10</p>
+                        <button 
+                           onClick={() => setQuizStep('intro')}
+                           className="w-full bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase py-3 rounded-xl"
+                        >
+                           Retake Exam
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {sidebarTab === 'reviewer' && (
+                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                    <header className="bg-red-900/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-4">
+                      <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-xl shrink-0">👿</div>
+                      <div>
+                        <h4 className="text-sm font-bold text-red-400">Reviewer 2 Protocol</h4>
+                      </div>
+                    </header>
+
+                    {!reviewer2Output && !isReviewer2Loading ? (
+                      <div className="text-center py-12">
+                        <p className="text-xs text-slate-500 mb-6 italic">"Your methodology is likely derivative..."</p>
+                        <button 
+                          onClick={handleSummonReviewer2}
+                          className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-6 rounded-2xl"
+                        >
+                          Summon Reviewer 2
+                        </button>
+                      </div>
+                    ) : isReviewer2Loading ? (
+                      <div className="flex flex-col items-center justify-center py-20 gap-4">
+                        <div className="w-12 h-12 border-4 border-red-500/10 border-t-red-500 rounded-full animate-spin"></div>
+                        <p className="text-[10px] text-red-400 font-black uppercase tracking-widest animate-pulse">Finding reasons to reject...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 animate-in fade-in duration-500">
+                        <div className="bg-slate-950/60 border border-red-500/20 p-5 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-line font-serif shadow-inner">
+                          {reviewer2Output}
+                        </div>
+                        <button onClick={handleSummonReviewer2} className="w-full text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase">Re-Review</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {sidebarTab === 'intel' && (
+                  <div className="p-6 space-y-8 animate-in fade-in duration-300 pb-20">
+                    <section>
+                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Critical Appraisal</h4>
+                       {!critique && !isCritiquing ? (
+                         <div className="bg-slate-950/50 border border-dashed border-slate-800 p-6 rounded-2xl text-center">
+                            <button 
+                              onClick={handleGenerateCritique}
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase py-2 px-4 rounded-xl"
+                            >
+                              Generate Critique
+                            </button>
+                         </div>
+                       ) : isCritiquing ? (
+                         <div className="flex flex-col items-center gap-4 py-10">
+                            <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
+                         </div>
+                       ) : (
+                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 leading-relaxed relative">
+                            {critique}
+                         </div>
+                       )}
+                    </section>
+
+                    <section>
+                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">AI Probability</h4>
+                       {!aiDetection && !isDetectingAI ? (
+                         <button 
+                           onClick={handleDetectAI}
+                           className="w-full bg-slate-950/50 border border-slate-800 p-4 rounded-xl text-xs text-slate-400"
+                         >
+                           Scan for AI Markers
+                         </button>
+                       ) : isDetectingAI ? (
+                         <div className="flex justify-center py-10"><div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div></div>
+                       ) : aiDetection && (
+                         <div className="bg-slate-950/60 p-5 rounded-2xl border border-amber-500/20 space-y-3">
+                            <div className="flex items-center justify-between mb-1">
+                               <span className="text-[10px] font-black uppercase text-slate-500">Probability</span>
+                               <span className="text-xs font-black text-amber-400">{aiDetection.probability}%</span>
+                            </div>
+                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                               <div className="h-full bg-amber-500" style={{ width: `${aiDetection.probability}%` }}></div>
+                            </div>
+                            <p className="text-xs text-slate-200 italic">{aiDetection.assessment}</p>
+                         </div>
+                       )}
+                    </section>
+
+                    <section>
+                       <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Grounding</h4>
+                       <div className="space-y-3">
+                          <button onClick={handlePerplexityCrossCheck} className="w-full bg-slate-950/40 border border-slate-800 p-4 rounded-xl text-left flex items-center justify-between group">
+                             <span className="text-[11px] font-bold text-slate-300">Perplexity Deep Dive</span>
+                             <span className="text-slate-600 group-hover:text-emerald-400 transition-colors">↗</span>
+                          </button>
+                          <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="w-full bg-slate-950/40 border border-slate-800 p-4 rounded-xl text-left flex items-center justify-between group">
+                             <span className="text-[11px] font-bold text-slate-300">Google Scholar</span>
+                             <span className="text-slate-600 group-hover:text-indigo-400 transition-colors">↗</span>
+                          </button>
+                       </div>
+                    </section>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Main PDF Content (Now on the RIGHT) */}
+        <div className={`flex-1 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative transition-all duration-500 ${getReaderClasses()}`}>
           <div 
             className="absolute inset-0 pointer-events-none z-10 transition-colors duration-500" 
             style={getFilterStyle()}
@@ -448,422 +704,15 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center bg-slate-950/50">
               <div className="text-6xl mb-4">🔍</div>
-              <h4 className="text-xl font-bold text-slate-300">Direct PDF link not found</h4>
-              <p className="text-sm text-slate-500 mt-2 max-w-md">
-                We couldn't automatically locate a PDF for this paper. Try opening it in your host application to search academic repositories.
-              </p>
+              <h4 className="text-xl font-bold text-slate-300">PDF Not Found</h4>
               <button 
                 onClick={handleOpenExternal}
-                className="mt-6 bg-slate-800 hover:bg-slate-700 text-indigo-400 font-bold px-6 py-2.5 rounded-xl border border-indigo-500/20 transition-all"
+                className="mt-6 bg-slate-800 hover:bg-slate-700 text-indigo-400 font-bold px-6 py-2.5 rounded-xl border border-indigo-500/20"
               >
-                Search on Google Scholar
+                Search Scholarship
               </button>
             </div>
           )}
-        </div>
-
-        <div className={`flex-[4] border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-xl transition-colors duration-500 ${getReaderClasses()}`}>
-          <div className="flex border-b border-slate-800 bg-slate-950/50 overflow-x-auto no-scrollbar">
-            <button 
-              onClick={() => setSidebarTab('notes')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'notes' ? 'bg-slate-900 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
-            >
-              ✍️ Notes
-            </button>
-            <button 
-              onClick={() => setSidebarTab('intel')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'intel' ? 'bg-slate-900 text-emerald-400 border-b-2 border-emerald-500' : 'text-slate-600 hover:text-slate-400'}`}
-            >
-              📡 Intel
-            </button>
-            <button 
-              onClick={() => setSidebarTab('citations')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'citations' ? 'bg-slate-900 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
-            >
-              🐇 Rabbit Hole
-            </button>
-            <button 
-              onClick={() => setSidebarTab('reviewer')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'reviewer' ? 'bg-slate-950 text-red-400 border-b-2 border-red-500' : 'text-slate-600 hover:text-slate-400'}`}
-            >
-              👿 Reviewer 2
-            </button>
-            <button 
-              onClick={() => setSidebarTab('quiz')}
-              className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest transition-all min-w-[80px] ${sidebarTab === 'quiz' ? 'bg-slate-950 text-indigo-400 border-b-2 border-indigo-500' : 'text-slate-600 hover:text-slate-400'}`}
-            >
-              🎓 Quiz
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {sidebarTab === 'notes' && (
-              <textarea
-                value={markdown}
-                onChange={handleMarkdownChange}
-                placeholder="Start typing your Markdown annotations here... Your notes are automatically saved to your Research Notes library."
-                className={`w-full h-full p-6 text-sm outline-none border-none resize-none font-mono leading-relaxed transition-colors duration-500 bg-transparent ${getTextClasses()}`}
-              />
-            )}
-
-            {sidebarTab === 'citations' && (
-              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
-                <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🐇</div>
-                    <div>
-                      <h4 className="text-sm font-bold text-indigo-400">Rabbit Hole Explorer</h4>
-                      <p className="text-[10px] text-indigo-500/70 font-medium">Deep dive into the article's academic network.</p>
-                    </div>
-                  </div>
-                  {!article.references?.length && (
-                    <button 
-                      onClick={handleEnterRabbitHole}
-                      disabled={enteringRabbitHole}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl transition-all"
-                    >
-                      {enteringRabbitHole ? 'Diving...' : 'Enter Rabbit Hole'}
-                    </button>
-                  )}
-                </header>
-
-                {article.references?.length ? (
-                  <div className="space-y-3">
-                    {article.references.map((citation, idx) => {
-                      const match = findLibraryMatch(citation);
-                      const isIngesting = ingestingId === citation;
-                      
-                      return (
-                        <div key={idx} className={`p-4 rounded-2xl border transition-all ${match ? 'bg-indigo-600/10 border-indigo-500/30' : 'bg-slate-950/40 border-slate-800'}`}>
-                           <p className={`text-[11px] font-medium leading-relaxed mb-3 ${getTextClasses()}`}>{citation}</p>
-                           <div className="flex justify-between items-center">
-                              {match ? (
-                                <button 
-                                  onClick={() => {
-                                    alert(`Paper "${match.title}" is already in your library. Jump to it in Library tab.`);
-                                  }}
-                                  className="text-[10px] bg-indigo-600 text-white font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg shadow-lg"
-                                >
-                                  📖 Open in Library
-                                </button>
-                              ) : (
-                                <button 
-                                  onClick={() => handleIngestCitation(citation)}
-                                  disabled={isIngesting}
-                                  className={`text-[10px] font-black uppercase tracking-tighter px-3 py-1.5 rounded-lg transition-all ${isIngesting ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 text-indigo-400 hover:bg-indigo-500 hover:text-white'}`}
-                                >
-                                  {isIngesting ? '🔍 Hydrating Details...' : '📥 Ingest to Library'}
-                                </button>
-                              )}
-                              <span className={`text-[9px] font-bold uppercase ${match ? 'text-indigo-400' : 'text-slate-600'}`}>
-                                {match ? '✓ Library Match' : 'New Trail'}
-                              </span>
-                           </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-20 opacity-40">
-                     <span className="text-4xl block mb-4">🕳️</span>
-                     <p className="text-xs">No path found yet. Enter the Rabbit Hole to map the bibliography.</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {sidebarTab === 'quiz' && (
-              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
-                <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center gap-4">
-                  <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🎓</div>
-                  <div>
-                    <h4 className="text-sm font-bold text-indigo-400">Knowledge Validation</h4>
-                    <p className="text-[10px] text-indigo-500/70 font-medium">Test your conceptual understanding of the core research claims.</p>
-                  </div>
-                </header>
-
-                {quizStep === 'intro' && (
-                  <div className="text-center py-12 space-y-6">
-                    <p className="text-xs text-slate-500 italic px-4 leading-relaxed">
-                      "A senior researcher must not only read, but internalize. This conceptual quiz measures your grasp of methodology and outcomes."
-                    </p>
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-left">
-                       <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Protocol:</p>
-                       <ul className="text-[10px] text-slate-400 space-y-1 ml-4 list-disc">
-                         <li>10 Multiple Choice Questions</li>
-                         <li>Conceptual Focus (Methodology & Results)</li>
-                         <li>Pass Mark: 7/10</li>
-                         <li>Status logged to local research library</li>
-                       </ul>
-                    </div>
-                    <button 
-                      onClick={handleGenerateQuiz}
-                      disabled={isGeneratingQuiz}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-8 rounded-2xl shadow-xl shadow-indigo-600/20 transition-all border border-indigo-500/20 flex items-center justify-center mx-auto gap-3"
-                    >
-                      {isGeneratingQuiz ? (
-                        <>
-                          <span className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                          Constructing Exam...
-                        </>
-                      ) : "Generate 10-Question Quiz"}
-                    </button>
-                  </div>
-                )}
-
-                {quizStep === 'active' && (
-                  <div className="space-y-8 animate-in fade-in duration-500">
-                    {quizQuestions.map((q, qIdx) => (
-                      <div key={qIdx} className="space-y-4">
-                        <p className={`text-xs font-bold leading-relaxed ${getTextClasses()}`}>
-                          <span className="text-indigo-500 mr-2">{qIdx + 1}.</span> {q.question}
-                        </p>
-                        <div className="grid grid-cols-1 gap-2">
-                          {q.options.map((opt, oIdx) => (
-                            <button
-                              key={oIdx}
-                              onClick={() => setUserAnswers(prev => ({ ...prev, [qIdx]: oIdx }))}
-                              className={`text-left p-3 rounded-xl text-[11px] border transition-all ${
-                                userAnswers[qIdx] === oIdx 
-                                ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/10' 
-                                : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700'
-                              }`}
-                            >
-                              <span className="w-5 h-5 inline-flex items-center justify-center rounded-full bg-slate-900 mr-3 text-[9px] font-bold border border-slate-800">
-                                {String.fromCharCode(65 + oIdx)}
-                              </span>
-                              {opt}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                    <button 
-                      onClick={handleQuizFinish}
-                      disabled={Object.keys(userAnswers).length < 10}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-black text-[10px] uppercase tracking-widest py-4 rounded-2xl shadow-xl transition-all border border-emerald-500/20"
-                    >
-                      {Object.keys(userAnswers).length < 10 ? `Answer All Questions (${Object.keys(userAnswers).length}/10)` : "Submit Examination"}
-                    </button>
-                  </div>
-                )}
-
-                {quizStep === 'results' && (
-                  <div className="text-center py-12 space-y-8 animate-in zoom-in-95 duration-300">
-                    <div className="space-y-2">
-                       <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto text-4xl shadow-2xl border-4 ${quizScore! >= 7 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-red-500/10 border-red-500 text-red-400'}`}>
-                         {quizScore! >= 7 ? '🏆' : '📚'}
-                       </div>
-                       <h3 className={`text-2xl font-black uppercase tracking-widest mt-4 ${quizScore! >= 7 ? 'text-emerald-400' : 'text-red-400'}`}>
-                         {quizScore! >= 7 ? 'EXAMINATION PASSED' : 'EXAMINATION FAILED'}
-                       </h3>
-                       <p className="text-sm font-bold text-slate-500">You scored {quizScore} out of 10</p>
-                    </div>
-
-                    <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800 space-y-4 text-left">
-                       <p className="text-[10px] font-black uppercase text-slate-600 tracking-widest mb-2">Review Summary</p>
-                       <div className="space-y-3">
-                          {quizQuestions.map((q, idx) => (
-                            <div key={idx} className="flex gap-3 text-[10px]">
-                               <span className={userAnswers[idx] === q.correctIndex ? 'text-emerald-400' : 'text-red-400'}>
-                                  {userAnswers[idx] === q.correctIndex ? '✓' : '✕'}
-                               </span>
-                               <p className="text-slate-400 line-clamp-1">{q.question}</p>
-                            </div>
-                          ))}
-                       </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                       <button 
-                         onClick={() => setQuizStep('intro')}
-                         className="flex-1 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold uppercase py-3 rounded-xl transition-all"
-                       >
-                         Retake Exam
-                       </button>
-                       <button 
-                         onClick={() => setSidebarTab('notes')}
-                         className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold uppercase py-3 rounded-xl transition-all shadow-xl shadow-indigo-600/20"
-                       >
-                         Go to Notes
-                       </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {sidebarTab === 'reviewer' && (
-              <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                <header className="bg-red-900/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-4">
-                  <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-xl shrink-0">👿</div>
-                  <div>
-                    <h4 className="text-sm font-bold text-red-400">Reviewer 2 Protocol</h4>
-                    <p className="text-[10px] text-red-500/70 font-medium">Expect dismissal, harsh critiques, and identifying fundamental flaws.</p>
-                  </div>
-                </header>
-
-                {!reviewer2Output && !isReviewer2Loading ? (
-                  <div className="text-center py-12">
-                    <p className="text-xs text-slate-500 mb-6 italic px-4">"Your methodology is likely derivative, and your conclusions are probably overstated."</p>
-                    <button 
-                      onClick={handleSummonReviewer2}
-                      className="bg-red-600 hover:bg-red-700 text-white font-black text-[10px] uppercase tracking-widest py-3 px-6 rounded-2xl shadow-xl shadow-red-600/20 transition-all border border-red-500/20"
-                    >
-                      Summon Reviewer 2
-                    </button>
-                  </div>
-                ) : isReviewer2Loading ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-4">
-                    <div className="w-12 h-12 border-4 border-red-500/10 border-t-red-500 rounded-full animate-spin"></div>
-                    <p className="text-[10px] text-red-400 font-black uppercase tracking-widest animate-pulse">Finding reasons to reject...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                    <div className="bg-slate-950/60 border border-red-500/20 p-5 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-line font-serif shadow-inner">
-                      {reviewer2Output}
-                    </div>
-                    <button 
-                      onClick={handleSummonReviewer2}
-                      className="w-full text-[10px] text-slate-500 hover:text-red-400 font-bold uppercase transition-colors"
-                    >
-                      Request Re-Review (Still Rejected)
-                    </button>
-                  </div>
-                )}
-                
-                <div className="pt-6 border-t border-slate-800">
-                  <p className="text-[9px] text-slate-600 italic text-center leading-relaxed">
-                    Reviewer 2's persona is configurable in the Settings tab. They are notoriously hard to please.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {sidebarTab === 'intel' && (
-              <div className="p-6 space-y-8 animate-in fade-in duration-300 pb-20">
-                <section>
-                   <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">AI Critical Appraisal</h4>
-                   {!critique && !isCritiquing ? (
-                     <div className="bg-slate-950/50 border border-dashed border-slate-800 p-6 rounded-2xl text-center">
-                        <p className="text-xs text-slate-600 mb-4">Generate an automated peer-review critique focused on methodology and novelty.</p>
-                        <button 
-                          onClick={handleGenerateCritique}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase py-2 px-4 rounded-xl transition-all shadow-lg shadow-emerald-600/20"
-                        >
-                          Generate Critique
-                        </button>
-                     </div>
-                   ) : isCritiquing ? (
-                     <div className="bg-slate-950/50 border border-emerald-500/20 p-8 rounded-2xl flex flex-col items-center gap-4">
-                        <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin"></div>
-                        <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest animate-pulse">Analyzing Methods...</p>
-                     </div>
-                   ) : (
-                     <div className="bg-slate-950/60 p-5 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 leading-relaxed whitespace-pre-line relative group">
-                        <button 
-                          onClick={() => setCritique(null)}
-                          className="absolute top-2 right-2 text-slate-600 hover:text-white transition-colors"
-                        >
-                          ✕
-                        </button>
-                        {critique}
-                     </div>
-                   )}
-                </section>
-
-                <section>
-                   <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Integrity Check (AI Detection)</h4>
-                   {!aiDetection && !isDetectingAI ? (
-                     <div className="bg-slate-950/50 border border-dashed border-slate-800 p-6 rounded-2xl text-center">
-                        <p className="text-xs text-slate-600 mb-4">Analyze linguistic markers to determine if this abstract was potentially generated by an LLM.</p>
-                        <button 
-                          onClick={handleDetectAI}
-                          className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold uppercase py-2 px-4 rounded-xl transition-all shadow-lg shadow-amber-600/20"
-                        >
-                          Scan for AI Markers
-                        </button>
-                     </div>
-                   ) : isDetectingAI ? (
-                     <div className="bg-slate-950/50 border border-amber-500/20 p-8 rounded-2xl flex flex-col items-center gap-4">
-                        <div className="w-8 h-8 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
-                        <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest animate-pulse">Scanning Linguistically...</p>
-                     </div>
-                   ) : aiDetection && (
-                     <div className="bg-slate-950/60 p-5 rounded-2xl border border-amber-500/20 space-y-3 relative group">
-                        <button 
-                          onClick={() => setAiDetection(null)}
-                          className="absolute top-2 right-2 text-slate-600 hover:text-white transition-colors"
-                        >
-                          ✕
-                        </button>
-                        <div className="flex items-center justify-between mb-1">
-                           <span className="text-[10px] font-black uppercase text-slate-500">AI Probability</span>
-                           <span className={`text-xs font-black ${aiDetection.probability > 60 ? 'text-red-400' : aiDetection.probability > 30 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                              {aiDetection.probability}%
-                           </span>
-                        </div>
-                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                           <div 
-                              className={`h-full transition-all duration-1000 ${aiDetection.probability > 60 ? 'bg-red-500' : aiDetection.probability > 30 ? 'bg-amber-500' : 'bg-emerald-500'}`} 
-                              style={{ width: `${aiDetection.probability}%` }}
-                           ></div>
-                        </div>
-                        <p className="text-xs text-slate-200 font-bold italic">{aiDetection.assessment}</p>
-                        <div className="space-y-1">
-                           {aiDetection.markers.map((m, i) => (
-                              <div key={i} className="text-[10px] text-slate-500 flex items-start gap-2">
-                                 <span className="text-indigo-500">•</span>
-                                 <span>{m}</span>
-                              </div>
-                           ))}
-                        </div>
-                     </div>
-                   )}
-                </section>
-
-                <section>
-                   <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">External Grounding</h4>
-                   <div className="space-y-3">
-                      <button 
-                        onClick={handlePerplexityCrossCheck}
-                        className="w-full bg-slate-950/40 border border-slate-800 hover:border-emerald-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
-                      >
-                         <div>
-                            <p className="text-[11px] font-bold text-slate-300">Perplexity Deep Dive</p>
-                            <p className="text-[9px] text-slate-500">Search for citations & community consensus</p>
-                         </div>
-                         <span className="text-slate-600 group-hover:text-emerald-400 transition-colors">↗</span>
-                      </button>
-                      
-                      <button 
-                        onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')}
-                        className="w-full bg-slate-950/40 border border-slate-800 hover:border-indigo-500/30 p-4 rounded-2xl text-left flex items-center justify-between transition-all group"
-                      >
-                         <div>
-                            <p className="text-[11px] font-bold text-slate-300">Google Scholar Network</p>
-                            <p className="text-[9px] text-slate-500">Track cited-by and version history</p>
-                         </div>
-                         <span className="text-slate-600 group-hover:text-indigo-400 transition-colors">↗</span>
-                      </button>
-                   </div>
-                </section>
-                
-                <div className="pt-4 border-t border-slate-800">
-                  <p className="text-[9px] text-slate-600 italic text-center">Grounding data is retrieved in real-time using search-grounded models.</p>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="p-3 bg-slate-950/80 border-t border-slate-800 flex justify-between items-center">
-            <span className="text-[9px] text-slate-600 font-bold uppercase">
-              {sidebarTab === 'notes' ? 'Markdown Editor' : sidebarTab === 'intel' ? 'Research Intel Panel' : sidebarTab === 'reviewer' ? 'Critical Rejection Simulation' : 'Conceptual Examination'}
-            </span>
-            <span className="text-[9px] text-slate-600 font-medium">
-              {sidebarTab === 'notes' ? 'Linked to Research Notes' : 'Grounded AI Analysis'}
-            </span>
-          </div>
         </div>
       </div>
     </div>
