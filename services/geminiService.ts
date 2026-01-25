@@ -1,5 +1,7 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed } from "../types";
+import { dbService } from "./dbService";
 
 // Initialize the Gemini API client using the environment variable API_KEY
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -48,27 +50,27 @@ export const geminiService = {
     const ai = getAI();
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: 'application/pdf',
-                  data: base64PDF,
-                },
+        model: 'gemini-3-pro-preview', // Upgraded for complex STEM papers
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: 'application/pdf',
+                data: base64PDF,
               },
-              {
-                text: "Analyze this scientific paper and extract: Title, Authors (array of strings), Abstract, Year of publication, and 5 technical tags. Return as a JSON object with these keys.",
-              },
-            ],
-          },
-        ],
+            },
+            {
+              text: "Analyze this scientific paper and extract: Title, Authors (array of strings), Abstract, Year of publication, and 5 technical tags. Return strictly as a JSON object with keys: title, authors, abstract, year, tags.",
+            },
+          ],
+        },
         config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text, {});
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error?.message || String(error);
       console.error("PDF Extraction Error:", error);
+      dbService.addLog('error', `PDF Metadata Extraction Failed: ${errorMsg}`);
       return null;
     }
   },
@@ -95,7 +97,8 @@ export const geminiService = {
         config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text, { tags: [], newTopics: [] });
-    } catch (error) {
+    } catch (error: any) {
+      dbService.addLog('warning', `Tag suggestion failed for "${title}": ${error?.message || 'Unknown error'}`);
       return { tags: [], newTopics: [] };
     }
   },
@@ -140,8 +143,8 @@ export const geminiService = {
         contents: prompt,
       });
       return response.text || "";
-    } catch (error) {
-      console.error("Podcast Script Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Podcast script generation failed: ${error?.message || 'Unknown error'}`);
       return "";
     }
   },
@@ -166,8 +169,8 @@ export const geminiService = {
         }
       });
       return response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || null;
-    } catch (error) {
-      console.error("Podcast Audio Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Podcast TTS generation failed: ${error?.message || 'Unknown error'}`);
       return null;
     }
   },
@@ -183,7 +186,8 @@ export const geminiService = {
         config: { systemInstruction, temperature: 0.8 }
       });
       return response.text || "";
-    } catch (error) {
+    } catch (error: any) {
+      dbService.addLog('warning', `WhatIf assistant failed: ${error?.message || 'Unknown error'}`);
       return "I'm having trouble processing that hypothesis.";
     }
   },
@@ -199,7 +203,8 @@ export const geminiService = {
         contents: prompt,
       });
       return response.text || "";
-    } catch (error) {
+    } catch (error: any) {
+      dbService.addLog('error', `Research synthesis failed: ${error?.message || 'Unknown error'}`);
       return "An error occurred during multi-document synthesis.";
     }
   },
@@ -216,7 +221,8 @@ export const geminiService = {
         config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text, []);
-    } catch (error) {
+    } catch (error: any) {
+      dbService.addLog('error', `Scholar search failed: ${error?.message || 'Unknown error'}`);
       throw error;
     }
   },
@@ -224,22 +230,43 @@ export const geminiService = {
   // Summarize an article into bullet points
   async summarizeArticle(title: string, abstract: string): Promise<string> {
     const ai = getAI();
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Summarize in 3 bullets: \nTitle: ${title}\nAbstract: ${abstract}`,
-    });
-    return response.text || "";
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Summarize in 3 bullets: \nTitle: ${title}\nAbstract: ${abstract}`,
+      });
+      return response.text || "";
+    } catch (error: any) {
+      dbService.addLog('warning', `Article summary failed: ${error?.message || 'Unknown error'}`);
+      return "Summary unavailable.";
+    }
   },
 
   // Ranks article candidates based on user interests and bias configuration
-  async recommendArticles(ratedArticles: Article[], books: any[], candidates: any[], aiConfig: AIConfig): Promise<number[]> {
+  async recommendArticles(ratedArticles: Article[], books: Book[], candidates: any[], aiConfig: AIConfig): Promise<number[]> {
     const ai = getAI();
-    const prompt = `Based on these rated papers: ${ratedArticles.map(a => `${a.title} (Rating: ${a.rating})`).join(', ')} 
-    And these books: ${books.map(b => b.title).join(', ')}
-    Rank the following candidates from 0 to ${candidates.length - 1} based on user interests. 
-    Bias: ${aiConfig.recommendationBias}.
-    Candidates: ${candidates.map((c, i) => `[${i}] ${c.title}: ${c.snippet}`).join('\n')}
-    Return only a JSON array of indices in order of recommendation.`;
+    
+    // Map books to detailed strings including GoodReads ratings and inferred tags
+    const bookContext = books.map(b => 
+      `${b.title} by ${b.author} (Rating: ${b.rating}/5, Tags: ${b.tags?.join(', ') || 'General Reference'})`
+    ).join('; ');
+
+    const prompt = `
+    Task: Rank the following candidates from 0 to ${candidates.length - 1} based on the user's proven research interests.
+    
+    User Expertise Context (Rated Papers): 
+    ${ratedArticles.map(a => `${a.title} (User Rating: ${a.rating}/10, Tags: ${a.tags.join(', ')})`).join('\n')} 
+
+    Foundational Reference Context (Including GoodReads Library): 
+    ${bookContext}
+
+    Discovery Bias Config: ${aiConfig.recommendationBias} (Conservative: narrow match, Experimental: novel high-uncertainty peaks).
+
+    Candidates to Rank: 
+    ${candidates.map((c, i) => `[${i}] ${c.title}: ${c.snippet}`).join('\n')}
+
+    Return ONLY a JSON array of indices in order of recommendation. Example: [2, 0, 1]
+    `;
     
     try {
       const response = await ai.models.generateContent({
@@ -249,8 +276,8 @@ export const geminiService = {
       });
       const result = extractJson(response.text, []);
       return Array.isArray(result) ? result : candidates.map((_, i) => i);
-    } catch (error) {
-      console.error("Recommend Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Recommendation ranking failed: ${error?.message || 'Unknown error'}`);
       return candidates.map((_, i) => i);
     }
   },
@@ -266,7 +293,8 @@ export const geminiService = {
         config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text, []);
-    } catch (error) {
+    } catch (error: any) {
+      dbService.addLog('warning', `Profile discovery failed: ${error?.message || 'Unknown error'}`);
       return [];
     }
   },
@@ -286,8 +314,8 @@ export const geminiService = {
       const data = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { results: data.results || [], groundingSources };
-    } catch (error) {
-      console.error("Trending Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Trending research sweep failed: ${error?.message || 'Unknown error'}`);
       return { results: [], groundingSources: [] };
     }
   },
@@ -306,8 +334,8 @@ export const geminiService = {
       const data = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { results: data.results || [], groundingSources };
-    } catch (error) {
-      console.error("Amazon Search Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Amazon book search failed: ${error?.message || 'Unknown error'}`);
       return { results: [], groundingSources: [] };
     }
   },
@@ -329,8 +357,8 @@ export const geminiService = {
         }
       });
       return extractJson(response.text, { nodes: [], links: [], clusters: [] });
-    } catch (error) {
-      console.error("Author Network Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Author network discovery failed: ${error?.message || 'Unknown error'}`);
       return { nodes: [], links: [], clusters: [] };
     }
   },
@@ -349,8 +377,8 @@ export const geminiService = {
       const data = extractJson(response.text, { references: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       return { references: data.references || [], groundingSources };
-    } catch (error) {
-      console.error("Discover References Error:", error);
+    } catch (error: any) {
+      dbService.addLog('warning', `Reference discovery failed for "${article.title}": ${error?.message || 'Unknown error'}`);
       return { references: [], groundingSources: [] };
     }
   },
@@ -367,8 +395,8 @@ export const geminiService = {
         config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text, null);
-    } catch (error) {
-      console.error("Define Term Error:", error);
+    } catch (error: any) {
+      dbService.addLog('warning', `Lexicon lookup failed for "${term}": ${error?.message || 'Unknown error'}`);
       return null;
     }
   },
@@ -385,8 +413,8 @@ export const geminiService = {
         config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text, null);
-    } catch (error) {
-      console.error("Fetch Details Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Article details fetch failed for "${query}": ${error?.message || 'Unknown error'}`);
       return null;
     }
   },
@@ -401,8 +429,8 @@ export const geminiService = {
         contents: prompt,
       });
       return response.text || "";
-    } catch (error) {
-      console.error("Reviewer 2 Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Reviewer 2 audit failed for "${title}": ${error?.message || 'Unknown error'}`);
       return "Critical review unavailable.";
     }
   },
@@ -422,8 +450,8 @@ export const geminiService = {
         config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text, []);
-    } catch (error) {
-      console.error("Generate Quiz Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Quiz generation failed for "${title}": ${error?.message || 'Unknown error'}`);
       return [];
     }
   },
@@ -440,8 +468,8 @@ export const geminiService = {
         config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text, []);
-    } catch (error) {
-      console.error("Discover Feeds Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Feed discovery failed: ${error?.message || 'Unknown error'}`);
       return [];
     }
   },
@@ -458,8 +486,8 @@ export const geminiService = {
         config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text, []);
-    } catch (error) {
-      console.error("Radar Updates Error:", error);
+    } catch (error: any) {
+      dbService.addLog('error', `Radar ping failed: ${error?.message || 'Unknown error'}`);
       return [];
     }
   }

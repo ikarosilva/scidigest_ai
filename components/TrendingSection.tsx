@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
+import { academicApiService } from '../services/academicApiService';
 import { FeedSourceType, Article, Book } from '../types';
 
 interface TrendingSectionProps {
@@ -29,10 +30,12 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
     
     try {
       if (mode === 'papers') {
-        const { results, groundingSources } = await geminiService.getTrendingResearch(topicsToSearch, timeScale);
+        // Use direct Academic API instead of Gemini for Scholar data
+        const results = await academicApiService.searchScholar(topicsToSearch);
         setTrending(results || []);
-        setGroundingSources(groundingSources || []);
+        setGroundingSources([]); // Direct API doesn't need search grounding chunks
       } else {
+        // Amazon books still benefits from Gemini's broader web search grounding
         const { results, groundingSources } = await geminiService.searchAmazonBooks(topicsToSearch);
         setAmazonBooks(results || []);
         setGroundingSources(groundingSources || []);
@@ -113,7 +116,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
           </h2>
           <p className="text-slate-400 mt-2">
             {mode === 'papers' 
-              ? "Crawl Google Scholar for publications with high citation velocity and trajectory-impact."
+              ? "Connecting to Semantic Scholar for high-velocity research and trajectory-impact."
               : "Discover highly-rated monographs and textbooks currently trending."}
           </p>
         </div>
@@ -145,13 +148,13 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
               mode === 'papers' ? 'bg-indigo-600' : 'bg-amber-600'
             } text-white`}
           >
-            {loading ? 'Analyzing Scholar...' : 'Sweep Repositories'}
+            {loading ? 'Connecting to API...' : 'Sweep Repositories'}
           </button>
         </div>
       </header>
 
-      {/* Grounding Sources Panel (Mandatory) */}
-      {groundingSources.length > 0 && (
+      {/* Grounding Sources Panel (Only for Amazon/Gemini mode) */}
+      {mode === 'amazon' && groundingSources.length > 0 && (
         <div className="bg-slate-950 border border-indigo-500/20 p-4 rounded-2xl animate-in slide-in-from-top-2">
           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></span>
@@ -189,7 +192,9 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
           <div className={`w-10 h-10 border-2 rounded-full animate-spin ${mode === 'papers' ? 'border-indigo-500/20 border-t-indigo-500' : 'border-amber-500/20 border-t-amber-500'}`}></div>
-          <p className="text-slate-600 text-xs font-medium animate-pulse">Analyzing Google Scholar velocity for these trajectories...</p>
+          <p className="text-slate-600 text-xs font-medium animate-pulse">
+            {mode === 'papers' ? 'Contacting Semantic Scholar API...' : 'Hydrating Technical Marketplace...'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -203,7 +208,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
               </div>
               <h3 onClick={() => mode === 'papers' && onRead(createPaperObject(item))} className={`text-md font-bold text-slate-100 mb-2 leading-tight ${mode === 'papers' ? 'cursor-pointer hover:text-indigo-400 transition-colors' : ''}`}>{item.title || 'Untitled Entry'}</h3>
               <p className="text-[10px] text-slate-500 mb-4">{mode === 'papers' ? (item.authors?.join(', ') || 'Various Authors') : 'by ' + (item.author || 'Unknown')}</p>
-              <p className="text-xs text-slate-400 mb-6 line-clamp-3 italic leading-relaxed">"{item.snippet || item.description || 'No description provided by search grounded model.'}"</p>
+              <p className="text-xs text-slate-400 mb-6 line-clamp-3 italic leading-relaxed">"{item.snippet || item.description || 'No description provided.'}"</p>
               
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-800/50">
                 <div className="flex items-center gap-4">
@@ -253,8 +258,8 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
           
           {(mode === 'papers' ? trending : amazonBooks).length === 0 && !loading && (
             <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-2xl border border-dashed border-slate-800">
-              <p className="text-slate-600 text-sm">No Scholar entries found for these trajectories. Try expanding your search filters or refreshing.</p>
-              {!hasLoadedOnce && <button onClick={fetchData} className="mt-4 text-xs font-bold text-indigo-400 hover:underline">Trigger Scholar Sweep</button>}
+              <p className="text-slate-600 text-sm">No results found for these trajectories. Try expanding your filters.</p>
+              {!hasLoadedOnce && <button onClick={fetchData} className="mt-4 text-xs font-bold text-indigo-400 hover:underline">Trigger Global Sweep</button>}
             </div>
           )}
         </div>

@@ -40,7 +40,8 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [isTimerPaused, setIsTimerPaused] = useState(false);
   const [showTimer, setShowTimer] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'notes' | 'lexicon' | 'whatif' | 'reviewer' | 'quiz' | 'citations'>('notes');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // CHANGED: Sidebar collapsed by default for an immersive reading experience
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   
   const [critique, setCritique] = useState<string | null>(null);
@@ -428,7 +429,8 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
-  const containerClasses = `flex flex-col h-full space-y-4 ${isMaximized ? 'fixed inset-0 z-[100] p-8 bg-slate-950' : ''}`;
+  // CHANGED: Removed space-y-4 and padding to allow the PDF to occupy full vertical space
+  const containerClasses = `flex flex-col h-[calc(100vh-80px)] ${isMaximized ? 'fixed inset-0 z-[100] p-0 bg-slate-950' : ''}`;
 
   if (!article) {
     return (
@@ -452,7 +454,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
 
   return (
     <div className={containerClasses}>
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-xl">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900 border-b border-slate-800 p-4 shadow-xl z-20">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[10px] bg-indigo-500/20 text-indigo-400 font-black uppercase tracking-widest px-2 py-0.5 rounded flex-shrink-0">Reader</span>
@@ -556,9 +558,9 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         </div>
       </header>
 
-      <div className="flex-1 flex gap-4 overflow-hidden relative">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Main PDF Content (Left Side - Maximized width) */}
-        <div className={`flex-1 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative ${getReaderClasses()}`}>
+        <div className={`flex-1 overflow-hidden relative ${getReaderClasses()}`}>
           <div 
             className="absolute inset-0 pointer-events-none z-10 transition-colors duration-500" 
             style={getFilterStyle()}
@@ -566,7 +568,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           
           {article.pdfUrl ? (
             <iframe 
-              src={`${article.pdfUrl}#toolbar=0`}
+              src={`${article.pdfUrl}#toolbar=0&view=FitH`}
               className={`w-full h-full border-none transition-all duration-500 ${readingMode === 'night' ? 'invert hue-rotate-180 brightness-90 contrast-110' : ''}`}
               title={article.title}
             />
@@ -584,19 +586,32 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           )}
         </div>
 
+        {/* Sidebar Expansion Handle (Visible when collapsed) */}
+        {!isSidebarOpen && (
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="group absolute right-0 top-0 bottom-0 w-8 bg-slate-900/50 hover:bg-indigo-500/20 border-l border-slate-800 transition-all flex flex-col items-center justify-center gap-4 z-10 cursor-pointer"
+          >
+            <div className="text-slate-500 group-hover:text-indigo-400 transition-colors text-xs font-black uppercase tracking-widest [writing-mode:vertical-lr] rotate-180">
+              Expand Notes
+            </div>
+            <span className="text-sm">✍️</span>
+          </button>
+        )}
+
         {/* Intelligence Side Window (Right Side - Controlled width) */}
         <div 
-          className={`flex flex-col border border-slate-800 rounded-3xl overflow-hidden shadow-xl transition-all duration-300 ease-in-out ${
-            isSidebarOpen ? 'w-[400px] opacity-100' : 'w-0 opacity-0 pointer-events-none'
+          className={`flex flex-col border-l border-slate-800 overflow-hidden shadow-xl transition-all duration-300 ease-in-out ${
+            isSidebarOpen ? 'w-[450px] opacity-100' : 'w-0 opacity-0 pointer-events-none'
           } ${getReaderClasses()}`}
         >
           {isSidebarOpen && (
             <>
               <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-950/50">
                  <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    {tabButtons.find(t => t.id === sidebarTab)?.label}
+                    {tabButtons.find(t => t.id === sidebarTab)?.label} Intelligence
                  </h3>
-                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-600 hover:text-white transition-colors">✕</button>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-600 hover:text-white transition-colors bg-slate-800/50 p-1 rounded">✕</button>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {sidebarTab === 'notes' && (

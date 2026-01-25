@@ -75,6 +75,11 @@ const App: React.FC = () => {
     }
   };
 
+  const isQuotaError = (err: any) => {
+    const msg = (err?.message || JSON.stringify(err)).toLowerCase();
+    return msg.includes('quota') || msg.includes('exhausted') || msg.includes('429') || msg.includes('limit');
+  };
+
   const performCloudSync = useCallback(async (localData: AppState) => {
     if (syncStatus === 'disconnected' || syncStatus === 'error') return;
     setSyncStatus('syncing');
@@ -136,8 +141,13 @@ const App: React.FC = () => {
         alert(`Imported ${newArticles.length} papers!`);
       }
     } catch (err: any) {
-      dbService.addLog('error', `Scholar Sync failed: ${err.message || JSON.stringify(err)}`);
-      alert("Scholar Sync failed. Check System Logs.");
+      const errorMsg = err.message || JSON.stringify(err);
+      dbService.addLog('error', `Scholar Sync failed: ${errorMsg}`);
+      if (isQuotaError(err)) {
+        setShowApiKeyDialog(true);
+      } else {
+        alert("Scholar Sync failed. Check System Logs.");
+      }
     } finally {
       setIsSyncingScholar(false);
     }
@@ -255,6 +265,10 @@ const App: React.FC = () => {
     input.click();
   };
 
+  // CHANGED: Immersive styling for the reader mode
+  const mainPadding = currentTab === 'reader' ? 'p-0' : 'p-8';
+  const contentWidth = currentTab === 'reader' ? 'max-w-none' : 'max-w-6xl mx-auto pb-20';
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
       <Sidebar 
@@ -288,14 +302,15 @@ const App: React.FC = () => {
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl text-center space-y-6">
             <h3 className="text-2xl font-bold text-white">Quota Recovery Required</h3>
             <p className="text-slate-400 text-sm">Your assistant has reached the rate limit for the free tier. To continue intensive research without delays, please select a billing-enabled API key.</p>
+            <p className="text-[10px] text-slate-500">More info at <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="underline">ai.google.dev/gemini-api/docs/billing</a></p>
             <button onClick={handleOpenSelectKey} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl transition-all">Select Paid Google Key</button>
             <button onClick={() => setShowApiKeyDialog(false)} className="text-slate-500 hover:text-slate-300 text-xs font-bold">Close & Wait</button>
           </div>
         </div>
       )}
 
-      <main className="flex-1 ml-64 p-8 min-h-screen">
-        <div className="max-w-6xl mx-auto pb-20">
+      <main className={`flex-1 ml-64 ${mainPadding} min-h-screen`}>
+        <div className={`${contentWidth}`}>
           {currentTab === 'feed' && (
             <FeedMonitor 
               ratedArticles={data.articles} 
@@ -303,7 +318,7 @@ const App: React.FC = () => {
               onAdd={(a) => setData(dbService.addArticle(a))} 
               onRead={handleOpenReader} 
               activeFeeds={feeds.filter(f => f.active)} 
-              aiConfig={aiConfig} 
+              aiConfig={aiConfig}
             />
           )}
 
@@ -451,78 +466,25 @@ const App: React.FC = () => {
               focusNodeId={networkFocusId} 
               onClearFocus={() => setNetworkFocusId(null)} 
               onUpdateArticle={handleUpdateArticle} 
-              onNavigateToArticle={handleOpenReaderById} 
-              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
+              onNavigateToArticle={handleOpenReaderById}
+              onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }}
             />
           )}
 
           {currentTab === 'topics' && (
-            <div className="space-y-8">
-              <header className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-3xl font-bold text-slate-100">Research Trajectories</h2>
-                  <p className="text-slate-400 mt-1">Define the domains and authors your assistant monitors.</p>
-                </div>
-              </header>
-              <InterestsManager 
-                interests={interests} 
-                onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
-                socialProfiles={data.socialProfiles} 
-                onUpdateSocialProfiles={handleUpdateSocialProfiles} 
-              />
-            </div>
+            <InterestsManager 
+              interests={interests} 
+              onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }} 
+              socialProfiles={data.socialProfiles} 
+              onUpdateSocialProfiles={handleUpdateSocialProfiles} 
+            />
           )}
 
           {currentTab === 'feeds' && (
             <FeedsSection 
               feeds={feeds} 
-              onUpdateFeeds={(nf) => { setFeeds(nf); dbService.saveFeeds(nf); }} 
+              onUpdateFeeds={(f) => { setFeeds(f); dbService.saveFeeds(f); }} 
             />
-          )}
-
-          {currentTab === 'portability' && (
-            <div className="space-y-8">
-              <header>
-                <h2 className="text-3xl font-bold">Data & Privacy</h2>
-                <p className="text-slate-400 mt-1">Manage your research trajectory backups and cloud synchronization.</p>
-              </header>
-              <section className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 space-y-10 shadow-xl">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                  <div className="space-y-4">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                       <span>💾</span> Local Portability
-                    </h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">
-                      Download your entire trajectory including ratings, research networks, and notes as a single encrypted JSON file. Use this to move between browser profiles or for long-term archival.
-                    </p>
-                    <div className="flex gap-4 pt-4">
-                      <button onClick={handleExportData} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg shadow-indigo-600/20">Export Backup</button>
-                      <button onClick={handleImportData} className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3.5 rounded-2xl border border-slate-700">Import File</button>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                       <span>☁️</span> Cloud Identity
-                    </h3>
-                    <p className="text-sm text-slate-500 leading-relaxed">
-                      Enable end-to-end encrypted synchronization. Your research is encrypted client-side using your private sync key before being stored in a hidden app-specific folder on your Google Drive.
-                    </p>
-                    <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex items-center justify-between mt-4">
-                      <div className="flex items-center gap-3">
-                        <span className={`w-3 h-3 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`}></span>
-                        <span className="text-xs font-black text-slate-300 uppercase tracking-[0.2em]">{syncStatus}</span>
-                      </div>
-                      <button 
-                        onClick={() => cloudSyncService.signIn((s) => { if(s) setSyncStatus('synced'); })} 
-                        className="text-[10px] font-black text-indigo-400 hover:text-white uppercase tracking-widest bg-indigo-500/10 px-4 py-2 rounded-xl transition-all"
-                      >
-                        {syncStatus === 'disconnected' ? 'Initialize Cloud' : 'Refresh Auth'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </div>
           )}
 
           {currentTab === 'settings' && (
@@ -536,13 +498,41 @@ const App: React.FC = () => {
             />
           )}
 
-          {currentTab === 'guide' && <GuideSection />}
+          {currentTab === 'portability' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+              <header>
+                <h2 className="text-3xl font-bold text-white">Data Portability & Privacy</h2>
+                <p className="text-slate-400">Manage your research trajectory backups and cloud synchronization.</p>
+              </header>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 space-y-4">
+                  <h3 className="text-xl font-bold">Local Backup</h3>
+                  <p className="text-sm text-slate-500">Download a full JSON backup of your library, notes, and research trajectories.</p>
+                  <div className="flex gap-3">
+                    <button onClick={handleExportData} className="bg-indigo-600 text-white px-6 py-2 rounded-xl text-xs font-bold">Export Backup</button>
+                    <button onClick={handleImportData} className="bg-slate-800 text-slate-300 px-6 py-2 rounded-xl text-xs font-bold border border-slate-700">Import Backup</button>
+                  </div>
+                </div>
+                <div className="bg-slate-900 p-8 rounded-[2rem] border border-slate-800 space-y-4">
+                  <h3 className="text-xl font-bold">Cloud Sync</h3>
+                  <p className="text-sm text-slate-500">Connect to Google Drive to enable encrypted synchronization across your devices.</p>
+                  <div className="flex gap-3">
+                    <button onClick={() => cloudSyncService.signIn((s) => s && setSyncStatus('synced'))} className="bg-emerald-600 text-white px-6 py-2 rounded-xl text-xs font-bold">Sign In</button>
+                    <button onClick={() => { cloudSyncService.signOut(); setSyncStatus('disconnected'); }} className="bg-slate-800 text-slate-300 px-6 py-2 rounded-xl text-xs font-bold border border-slate-700">Sign Out</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {currentTab === 'version' && <VersionSection />}
-          {currentTab === 'logs' && <LogSection logs={data.logs} onClear={() => { dbService.clearLogs(); setData(dbService.getData()); }} />}
+          {currentTab === 'logs' && <LogSection logs={data.logs} onClear={() => dbService.clearLogs()} />}
+          {currentTab === 'guide' && <GuideSection />}
         </div>
       </main>
     </div>
   );
 };
 
+// Add missing default export
 export default App;
