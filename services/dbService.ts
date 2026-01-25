@@ -32,6 +32,7 @@ const DEFAULT_INTERESTS = [
 
 const DEFAULT_AI_CONFIG: AIConfig = {
   recommendationBias: 'balanced',
+  feedbackUrl: 'https://github.com/your-username/your-repo/issues/new', // Updated placeholder
   reviewer2Prompt: 'Review this paper as a journal Reviewer 2. Provide criticism on methods, weak or hidden assumptions, logical/mathematical/reasoning mistakes. Identify meaningless or over citations as well as incorrect interpretation of previous works. Point out any biases. If appropriate, be dismissive of results.'
 };
 
@@ -57,7 +58,10 @@ export const dbService = {
   },
   getAIConfig: (): AIConfig => {
     const stored = localStorage.getItem(AI_CONFIG_KEY);
-    return stored ? JSON.parse(stored) : DEFAULT_AI_CONFIG;
+    const parsed = stored ? JSON.parse(stored) : DEFAULT_AI_CONFIG;
+    // Migration for new fields
+    if (!parsed.feedbackUrl) parsed.feedbackUrl = DEFAULT_AI_CONFIG.feedbackUrl;
+    return parsed;
   },
   saveAIConfig: (config: AIConfig) => {
     localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
@@ -72,7 +76,7 @@ export const dbService = {
       feedbackSubmissions: [],
       lastModified: new Date().toISOString(),
       version: APP_VERSION,
-      aiConfig: DEFAULT_AI_CONFIG,
+      aiConfig: dbService.getAIConfig(),
       totalReadTime: 0,
       socialProfiles: {},
       trackedAuthors: []
@@ -107,7 +111,7 @@ export const dbService = {
     });
 
     parsed.lastModified = parsed.lastModified || new Date().toISOString();
-    parsed.aiConfig = parsed.aiConfig || DEFAULT_AI_CONFIG;
+    parsed.aiConfig = parsed.aiConfig || dbService.getAIConfig();
     parsed.totalReadTime = parsed.totalReadTime || 0;
     parsed.socialProfiles = parsed.socialProfiles || {};
     

@@ -5,6 +5,24 @@ import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, Social
 // Always initialize GoogleGenAI with a named parameter using process.env.API_KEY directly
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+/**
+ * Robust JSON extraction from AI response text.
+ */
+const extractJson = (text: string, fallback: any = []) => {
+  try {
+    // Look for JSON array or object
+    const match = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+    // Try parsing the whole thing if no match
+    return JSON.parse(text);
+  } catch (e) {
+    console.warn("JSON Parse Warning: Falling back to default.", e);
+    return fallback;
+  }
+};
+
 export const geminiService = {
   /**
    * Performs cross-document synthesis on a collection of articles and notes.
@@ -47,18 +65,18 @@ export const geminiService = {
   async getRadarUpdates(trackedPapers: string[], trackedAuthors: string[]): Promise<any[]> {
     const ai = getAI();
     const prompt = `
-      Act as an automated research radar. Your goal is to find the latest (2024-2025) academic activity regarding specific papers and authors.
+      Act as an automated research radar. Your goal is to find the latest academic activity regarding specific papers and authors.
 
-      TRACKED PAPERS (Look for NEW papers that CITE these):
+      TRACKED PAPERS:
       ${trackedPapers.map(p => `- "${p}"`).join('\n')}
 
-      TRACKED AUTHORS (Look for NEW papers PUBLISHED by these individuals):
+      TRACKED AUTHORS:
       ${trackedAuthors.map(a => `- ${a}`).join('\n')}
 
       INSTRUCTIONS:
       1. Use Google Search to find forward citations for the papers and recent bibliographies for the authors.
       2. Return a JSON array of discovered papers.
-      3. For each hit, specify WHY it was found (e.g. "Cites your tracked paper X" or "New from tracked author Y").
+      3. For each hit, specify WHY it was found.
       4. Format: [{ title, authors, year, abstract, reason, source, url }]
       
       Return ONLY valid JSON.
@@ -72,9 +90,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Radar Update Error:", error);
       return [];
@@ -87,7 +103,7 @@ export const geminiService = {
   async generateQuiz(title: string, abstract: string) {
     const ai = getAI();
     const prompt = `Generate a conceptual quiz of exactly 10 multiple-choice questions based on this research paper. 
-    Focus on core concepts, methodology, and significant results rather than minor details or exact numbers.
+    Focus on core concepts, methodology, and significant results.
     Each question must have exactly 4 options.
     
     Paper Title: ${title}
@@ -96,9 +112,7 @@ export const geminiService = {
     Return the response ONLY as a JSON array of objects, where each object has:
     - question: string
     - options: string[] (exactly 4 strings)
-    - correctIndex: number (0-3)
-    
-    Do not use markdown blocks or preamble.`;
+    - correctIndex: number (0-3)`;
 
     try {
       const response = await ai.models.generateContent({
@@ -120,8 +134,7 @@ export const geminiService = {
           }
         }
       });
-      const text = response.text || '[]';
-      return JSON.parse(text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Generate Quiz Error:", error);
       return [];
@@ -137,32 +150,29 @@ export const geminiService = {
     let biasInstruction = "";
     switch(aiConfig.recommendationBias) {
       case 'conservative':
-        biasInstruction = "Strictly prioritize candidates that are very similar in topic and style to the user's highest rated articles. Avoid novel or experimental topics.";
+        biasInstruction = "Strictly prioritize candidates that are very similar in topic and style to the user's highest rated articles.";
         break;
       case 'experimental':
-        biasInstruction = "Look for novel, breakthrough, or diverse topics that the user hasn't explored much yet, but that intersect with their general research interests. Favor high-uncertainty but high-potential-interest candidates ('Exploratory' mode).";
+        biasInstruction = "Look for novel, breakthrough, or diverse topics that the user hasn't explored much yet.";
         break;
       case 'balanced':
       default:
-        biasInstruction = "Balance similarity to past high-rated content with occasional novel topics that expand the user's horizons slightly.";
+        biasInstruction = "Balance similarity to past high-rated content with occasional novel topics.";
         break;
     }
 
     const prompt = `
-      As a world-class research assistant, your task is to rank the following candidate papers based on the user's historical preferences.
+      Rank the following candidate papers based on the user's historical preferences.
       
       Recommendation Bias: ${biasInstruction}
 
-      User's High-Rated Articles (10/10):
-      ${ratedArticles.filter(a => a.rating >= 8).map(a => `- ${a.title} (${a.tags.join(', ')})`).join('\n')}
-      
-      User's Reading List (Books):
-      ${books.map(b => `- ${b.title} by ${b.author}`).join('\n')}
+      User's High-Rated Articles:
+      ${ratedArticles.filter(a => a.rating >= 8).map(a => `- ${a.title}`).join('\n')}
 
-      Candidate Papers to Rank:
-      ${candidates.map((c, i) => `${i}. Title: ${c.title}, Year: ${c.year}, Abstract Snippet: ${c.snippet}`).join('\n')}
+      Candidate Papers:
+      ${candidates.map((c, i) => `${i}. Title: ${c.title}, Abstract Snippet: ${c.snippet}`).join('\n')}
 
-      Return a JSON array of indices representing the most relevant candidates, sorted by predicted interest.
+      Return a JSON array of indices representing the most relevant candidates.
     `;
 
     try {
@@ -177,7 +187,7 @@ export const geminiService = {
           }
         }
       });
-      return JSON.parse(response.text || '[]');
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Gemini Recommendation Error:", error);
       return candidates.map((_, i) => i);
@@ -186,28 +196,19 @@ export const geminiService = {
 
   async discoverInterestsFromProfiles(profiles: SocialProfiles): Promise<string[]> {
     const ai = getAI();
-    
     const profileContext = [
       profiles.name ? `- Full Name: ${profiles.name}` : '',
       profiles.medium ? `- Medium: ${profiles.medium}` : '',
       profiles.linkedin ? `- LinkedIn: ${profiles.linkedin}` : '',
       profiles.googleScholar ? `- Google Scholar: ${profiles.googleScholar}` : '',
-      profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Broadly search the web for this name)' : ''
+      profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search"' : ''
     ].filter(Boolean).join('\n');
 
-    const prompt = `You are an elite academic research scout. Your goal is to generate an EXHAUSTIVE and HOLISTIC technical knowledge map for this researcher based on the provided profile context.
-
-    User Context:
+    const prompt = `Generate a technical knowledge map (20 granular interest strings) for this researcher.
+    Context:
     ${profileContext}
     
-    CRITICAL INSTRUCTIONS:
-    1. Perform a live Google Search for this individual's academic output, affiliations, and professional citations.
-    2. Analyze their most cited work and recent technical publications to identify core trajectories.
-    3. PROVIDE A DIVERSE AND GRANULAR LIST. Do not provide high-level terms (e.g., skip "AI" or "Medicine"). Provide specific research domains (e.g., "Non-invasive hemodynamics monitoring" or "Transformer-based protein folding").
-    4. Return EXACTLY 20 high-quality technical interest strings as a JSON array.
-    5. Do not worry about redundant topics; the system needs a complete holistic map of their research identity even if it overlaps with common existing interests.
-    
-    Return ONLY a JSON array.`;
+    Return a JSON array of strings.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -217,10 +218,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Discover Interests Error:", error);
       return [];
@@ -232,15 +230,8 @@ export const geminiService = {
    */
   async discoverScientificFeeds(topics: string[]): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Find professional scientific and technical RSS/Atom feeds, journal alert pages, or blog notification URLs for these research topics: ${topics.join(', ')}.
-    
-    STRICT CATEGORIES TO EXPLORE:
-    - Conferences (e.g. NeurIPS, ICML, CVPR)
-    - High-impact Journals (Nature, Science, Lancet, NEJM)
-    - Pre-print servers (arXiv sections, MedRxiv, bioRxiv)
-    - Top-tier Labs/Blogs (HuggingFace, DeepMind, OpenAI, Microsoft Research)
-    
-    Return a JSON array of high-quality, verified sources. Format: [{name, url, type, description}]`;
+    const prompt = `Find scientific RSS/Atom feeds or journal alert URLs for these research topics: ${topics.join(', ')}.
+    Return a JSON array: [{name, url, type, description}]`;
 
     try {
       const response = await ai.models.generateContent({
@@ -250,9 +241,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Discover Scientific Feeds Error:", error);
       return [];
@@ -261,9 +250,8 @@ export const geminiService = {
 
   async searchAmazonBooks(topics: string[]): Promise<Partial<Book>[]> {
     const ai = getAI();
-    const prompt = `Find the 10 most relevant, high-rated, and recently published scientific or technical books on Amazon.com for the following topics: ${topics.join(', ')}.
-    
-    Return a JSON array of objects with: title, author, rating (out of 5), price, amazonUrl, and a 1-sentence description.`;
+    const prompt = `Find 10 relevant scientific/technical books on Amazon for: ${topics.join(', ')}.
+    Return a JSON array: [{title, author, rating, price, amazonUrl, description}]`;
 
     try {
       const response = await ai.models.generateContent({
@@ -273,9 +261,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Amazon Search Error:", error);
       return [];
@@ -286,23 +272,20 @@ export const geminiService = {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
     
-    const prompt = `URGENT TASK: Use the googleSearch tool to specifically locate and scrape the Google Scholar citations profile for: "${targetIdentity}". 
+    const prompt = `Use the googleSearch tool to retrieve all publications from the following Google Scholar profile: "${targetIdentity}". 
     
-    Search Strategy:
-    1. Search for "Google Scholar citations profile for ${targetIdentity}".
-    2. If a URL containing "scholar.google.com/citations?user=" is found, access it directly.
-    3. Scrape the list of ALL publications shown on that profile page.
+    If the identity provided is a direct URL (e.g., https://scholar.google.com/citations?user=...), prioritize visiting that exact page.
     
-    FOR each publication, extract:
-    - title: Full paper title.
-    - authors: Array of authors as strings.
-    - abstract: A brief 2-sentence summary (infer from search snippet if needed).
-    - year: 4-digit publication year.
-    - citationCount: citations as integer.
-    - scholarUrl: Direct Google Scholar URL for the paper.
-    - tags: 2-3 relevant keywords.
+    For each paper, extract:
+    - title: string
+    - authors: array of strings
+    - abstract: string (short summary)
+    - year: string
+    - citationCount: number
+    - scholarUrl: string
+    - tags: array of strings
 
-    Return the final result ONLY as a JSON array of objects. Do not include markdown code blocks or conversational text.`;
+    Return the final result ONLY as a JSON array of objects. Do not include conversational text.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -313,11 +296,7 @@ export const geminiService = {
         }
       });
       
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      const cleanedJson = jsonMatch ? jsonMatch[0] : text;
-      
-      const result = JSON.parse(cleanedJson);
+      const result = extractJson(response.text || '[]');
       return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error("Fetch Scholar Articles Error:", error);
@@ -328,12 +307,8 @@ export const geminiService = {
   async discoverAuthorNetwork(profiles: SocialProfiles) {
     const ai = getAI();
     const targetIdentity = profiles.googleScholar || profiles.name;
-    const prompt = `Research the co-author network of ${targetIdentity} using their Google Scholar profile. Identify clusters and papers.
-    
-    Return a JSON object with:
-    - nodes: Array of { id, name, type, cluster, level }
-    - links: Array of { source, target, type }
-    - clusters: Array of { name, color }`;
+    const prompt = `Research the co-author network of ${targetIdentity} via Google Scholar.
+    Return a JSON object with: nodes, links, clusters.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -343,9 +318,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '{}';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '{}', {});
     } catch (error) {
       console.error("Discover Author Network Error:", error);
       return null;
@@ -364,9 +337,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Discover References Error:", error);
       return [];
@@ -378,18 +349,8 @@ export const geminiService = {
    */
   async fetchArticleDetails(citation: string): Promise<Partial<Article> | null> {
     const ai = getAI();
-    const prompt = `Search for the full academic metadata of the following cited paper: "${citation}".
-    
-    Return a JSON object with:
-    - title: Full paper title
-    - authors: Array of authors
-    - abstract: Brief 3-4 sentence abstract
-    - year: 4-digit year
-    - citationCount: integer estimate
-    - pdfUrl: Link to a PDF if publicly available (arXiv, etc)
-    - tags: 2-3 technical keywords
-    
-    Return ONLY JSON.`;
+    const prompt = `Search metadata for this cited paper: "${citation}".
+    Return a JSON object: {title, authors, abstract, year, citationCount, pdfUrl, tags}`;
 
     try {
       const response = await ai.models.generateContent({
@@ -399,9 +360,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '{}';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '{}', null);
     } catch (error) {
       console.error("Fetch Article Details Error:", error);
       return null;
@@ -412,7 +371,7 @@ export const geminiService = {
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Summarize this scientific article in 3 bullet points for a senior researcher: \nTitle: ${title}\nAbstract: ${abstract}`,
+      contents: `Summarize this scientific article in 3 bullet points: \nTitle: ${title}\nAbstract: ${abstract}`,
     });
     return response.text;
   },
@@ -429,24 +388,13 @@ export const geminiService = {
       return response.text;
     } catch (error) {
       console.error("Reviewer 2 Error:", error);
-      return "Unable to summon Reviewer 2 at this time. Perhaps they are busy rejecting another paper.";
+      return "Unable to summon Reviewer 2 at this time.";
     }
   },
 
   async critiqueArticle(title: string, abstract: string) {
     const ai = getAI();
-    const prompt = `As a senior peer reviewer for a high-impact journal, provide a critical appraisal of the following research based on its abstract. 
-    
-    Title: ${title}
-    Abstract: ${abstract}
-    
-    Provide your critique in exactly 4 sections:
-    1. **Methodological Soundness**: Potential weaknesses or assumptions.
-    2. **Statistical Considerations**: Concerns regarding sample size, data processing, or bias.
-    3. **Novelty vs. Incrementalism**: Does this push the field forward?
-    4. **Critical Consensus**: How this might be received by the broader community.
-    
-    Keep it professional, objective, and dense.`;
+    const prompt = `Critique this research based on its abstract: \nTitle: ${title}\nAbstract: ${abstract}`;
     
     try {
       const response = await ai.models.generateContent({
@@ -456,25 +404,14 @@ export const geminiService = {
       return response.text;
     } catch (error) {
       console.error("Critique Article Error:", error);
-      return "Unable to generate critique at this time.";
+      return "Unable to generate critique.";
     }
   },
 
   async analyzeAIProbability(title: string, abstract: string) {
     const ai = getAI();
-    const prompt = `Act as a forensic scientific linguist. Analyze the following article title and abstract for markers of Large Language Model (AI) generation. 
-    Look for:
-    - Over-polishing and lack of domain-specific "jargon quirks".
-    - Repetitive structural patterns typical of default LLM output.
-    - Consistency across highly complex technical claims.
-
-    Title: ${title}
-    Abstract: ${abstract}
-    
-    Return your assessment as a JSON object with:
-    - probability: number (0-100)
-    - assessment: string (1-sentence conclusion)
-    - markers: string[] (List 2-3 technical reasons for your score)`;
+    const prompt = `Analyze this abstract for AI markers: \nTitle: ${title}\nAbstract: ${abstract}
+    Return JSON object: {probability, assessment, markers}`;
 
     try {
       const response = await ai.models.generateContent({
@@ -493,7 +430,7 @@ export const geminiService = {
           }
         }
       });
-      return JSON.parse(response.text || '{}');
+      return extractJson(response.text || '{}', { probability: 0, assessment: "Error", markers: [] });
     } catch (error) {
       console.error("AI Detection Error:", error);
       return { probability: 0, assessment: "Error analyzing content.", markers: [] };
@@ -502,7 +439,7 @@ export const geminiService = {
 
   async analyzeSentiment(article: Article): Promise<UserReviews> {
     const ai = getAI();
-    const prompt = `Research the impact of: "${article.title}". Return JSON with sentiment, summary, citationCount, and citedByUrl.`;
+    const prompt = `Research impact of: "${article.title}". Return JSON with sentiment, summary, citationCount, and citedByUrl.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -512,9 +449,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '{}';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      const result = JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      const result = extractJson(response.text || '{}', {});
       return {
         sentiment: (result.sentiment as Sentiment) || 'Unknown',
         summary: result.summary || 'Analysis complete.',
@@ -530,7 +465,7 @@ export const geminiService = {
 
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Find trending papers in: ${topics.join(', ')} from the last ${timeScale}. Return a JSON array of objects.`;
+    const prompt = `Find trending papers in: ${topics.join(', ')} from last ${timeScale}. Return a JSON array.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -540,9 +475,7 @@ export const geminiService = {
           tools: [{ googleSearch: {} }]
         }
       });
-      const text = response.text || '[]';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      return JSON.parse(jsonMatch ? jsonMatch[0] : text);
+      return extractJson(response.text || '[]');
     } catch (error) {
       console.error("Trending Research Error:", error);
       return [];
@@ -552,7 +485,7 @@ export const geminiService = {
   async filterBooks(rawJson: any[], topics: string[]): Promise<Book[]> {
     const ai = getAI();
     const bookSummaries = rawJson.filter(item => item.book).map(item => ({ title: item.book, rating: item.rating })).slice(0, 100);
-    const prompt = `Filter these books for scientific relevance to: ${topics.join(', ')}. Return JSON array. \n${JSON.stringify(bookSummaries)}`;
+    const prompt = `Filter these for scientific relevance to: ${topics.join(', ')}. Return JSON array. \n${JSON.stringify(bookSummaries)}`;
 
     try {
       const response = await ai.models.generateContent({
@@ -566,13 +499,14 @@ export const geminiService = {
           }
         }
       });
-      const filtered = JSON.parse(response.text || '[]');
+      const filtered = extractJson(response.text || '[]');
       return filtered.map((b: any) => ({
         id: Math.random().toString(36).substr(2, 9),
         title: b.title,
         author: 'Imported',
         rating: b.rating || 0,
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        shelfIds: []
       }));
     } catch (error) {
       console.error("Filter Books Error:", error);

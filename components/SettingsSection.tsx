@@ -29,6 +29,10 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     onUpdateAIConfig({ ...aiConfig, reviewer2Prompt: e.target.value });
   };
 
+  const handleFeedbackUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdateAIConfig({ ...aiConfig, feedbackUrl: e.target.value });
+  };
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
@@ -39,6 +43,30 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           Configure your research workflow preferences and AI discovery bias.
         </p>
       </header>
+
+      {/* Project & Support Configuration */}
+      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+        <h3 className="text-xl font-bold text-slate-200 mb-6 flex items-center gap-2">
+          <span>🏗️</span> Project Metadata
+        </h3>
+        <p className="text-sm text-slate-400 mb-8">
+          Configure where the "Submit Issues" feature sends your bug reports and feature requests.
+        </p>
+
+        <div className="space-y-4">
+           <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">GitHub Repository / Issue URL</label>
+           <input 
+             type="url"
+             value={aiConfig.feedbackUrl}
+             onChange={handleFeedbackUrlChange}
+             className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-xs text-slate-300 outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+             placeholder="https://github.com/your-username/your-repo/issues/new"
+           />
+           <p className="text-[10px] text-slate-500 italic">
+             Providing a valid GitHub URL allows the Feedback tool to pre-fill issues with system information.
+           </p>
+        </div>
+      </section>
 
       {/* AI Recommendation Engine Config */}
       <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">

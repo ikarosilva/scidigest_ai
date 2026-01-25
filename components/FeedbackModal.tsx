@@ -12,14 +12,14 @@ const FeedbackModal: React.FC<FeedbackModalProps> = ({ onClose }) => {
   const [description, setDescription] = useState('');
   
   const count = dbService.getMonthlyFeedbackCount();
+  const config = dbService.getAIConfig();
   const isLimitReached = count >= 5;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (isLimitReached) return;
 
-    // Use a placeholder URL or the user's specific repo if known
-    const repoUrl = "https://github.com/user/scidigest-ai/issues/new"; 
+    const repoUrl = config.feedbackUrl || "https://github.com/user/scidigest-ai/issues/new"; 
     const label = type === 'bug' ? 'bug' : 'enhancement';
     
     // Prefix the version to the title for easy triage
@@ -35,7 +35,7 @@ ${description}
 *Submitted via SciDigest AI Feedback Tool*
     `);
     
-    const finalUrl = `${repoUrl}?title=${encodeURIComponent(prefixedTitle)}&labels=${label}&body=${body}`;
+    const finalUrl = `${repoUrl}${repoUrl.includes('?') ? '&' : '?'}title=${encodeURIComponent(prefixedTitle)}&labels=${label}&body=${body}`;
     
     // Track locally
     dbService.trackFeedbackSubmission();
@@ -44,6 +44,8 @@ ${description}
     window.open(finalUrl, '_blank');
     onClose();
   };
+
+  const isDefaultUrl = config.feedbackUrl.includes('your-username');
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
@@ -57,6 +59,15 @@ ${description}
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {isDefaultUrl && (
+            <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3">
+              <span className="text-xl">⚠️</span>
+              <p className="text-[11px] text-amber-300 leading-relaxed">
+                <strong>Setup Required:</strong> The repository URL is currently set to a placeholder. You can update this in <strong>Settings</strong> to point to your actual project.
+              </p>
+            </div>
+          )}
+
           <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800">
             <button 
               type="button"

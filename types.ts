@@ -24,6 +24,7 @@ export type ReadingMode = 'default' | 'paper' | 'night';
 export interface AIConfig {
   recommendationBias: RecommendationBias;
   reviewer2Prompt: string;
+  feedbackUrl: string; // New: Configurable URL for issue reporting
 }
 
 export interface UserReviews {
