@@ -17,6 +17,67 @@ const extractJson = (text: string, fallback: any = []) => {
 
 export const geminiService = {
   /**
+   * Extracts scientific metadata from a raw PDF file.
+   */
+  async extractMetadataFromPDF(base64PDF: string): Promise<any> {
+    const ai = getAI();
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'application/pdf',
+                  data: base64PDF,
+                },
+              },
+              {
+                text: "Analyze this scientific paper and extract: Title, Authors (array of strings), Abstract, Year of publication, and 5 technical tags. Return as a JSON object with these keys.",
+              },
+            ],
+          },
+        ],
+        config: { responseMimeType: "application/json" }
+      });
+      return extractJson(response.text || "{}", {});
+    } catch (error) {
+      console.error("PDF Extraction Error:", error);
+      return null;
+    }
+  },
+
+  /**
+   * Suggests tags for a paper and identifies which ones are new to the user's trajectory.
+   */
+  async suggestTagsAndTopics(title: string, abstract: string, existingInterests: string[]): Promise<{ tags: string[], newTopics: string[] }> {
+    const ai = getAI();
+    const prompt = `
+      Paper: ${title}
+      Abstract: ${abstract}
+      Existing User Interests: ${existingInterests.join(', ')}
+
+      Analyze the paper. Provide:
+      1. A list of 5 technical tags.
+      2. Identify which of these tags represent a significant new research direction not covered by the existing interests.
+      
+      Return JSON: { "tags": [], "newTopics": [] }
+    `;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      return extractJson(response.text || '{"tags":[], "newTopics":[]}', { tags: [], newTopics: [] });
+    } catch (error) {
+      return { tags: [], newTopics: [] };
+    }
+  },
+
+  /**
    * Generates a 1-sentence technical QuickTake for a paper.
    */
   async generateQuickTake(title: string, abstract: string): Promise<string> {

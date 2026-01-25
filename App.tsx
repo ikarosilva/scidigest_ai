@@ -19,6 +19,7 @@ import InterestsManager from './components/InterestsManager';
 import VersionSection from './components/VersionSection';
 import LogSection from './components/LogSection';
 import GuideSection from './components/GuideSection';
+import ManualAddModal from './components/ManualAddModal';
 import { dbService, APP_VERSION } from './services/dbService';
 import { exportService } from './services/exportService';
 import { geminiService } from './services/geminiService';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [aiConfig, setAIConfig] = useState<AIConfig>(dbService.getAIConfig());
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('disconnected');
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showManualAdd, setShowManualAdd] = useState(false);
   const [isSyncingScholar, setIsSyncingScholar] = useState(false);
   const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
@@ -164,6 +166,13 @@ const App: React.FC = () => {
     setCurrentTab('reader');
   };
 
+  const handleOpenReaderById = (id: string) => {
+    const article = data.articles.find(a => a.id === id);
+    if (article) {
+      handleOpenReader(article);
+    }
+  };
+
   const handleExportData = () => {
     const backup = dbService.exportFullBackup();
     exportService.downloadFile(backup, `scidigest_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
@@ -201,6 +210,15 @@ const App: React.FC = () => {
       
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
       
+      {showManualAdd && (
+        <ManualAddModal 
+          onClose={() => setShowManualAdd(false)}
+          onAdd={(a) => setData(dbService.addArticle(a))}
+          existingInterests={interests}
+          onUpdateInterests={(ni) => { setInterests(ni); dbService.saveInterests(ni); }}
+        />
+      )}
+
       {showSynthesisModal && (
         <SynthesisModal 
           articles={data.articles.filter(a => selectedArticleIds.includes(a.id))} 
@@ -275,13 +293,16 @@ const App: React.FC = () => {
           )}
 
           {currentTab === 'library' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="space-y-8">
               <header className="flex justify-between items-center">
                 <div>
                   <h2 className="text-3xl font-bold text-slate-100">Research Library</h2>
                   <p className="text-slate-400 mt-1">Managed ingestion of scientific literature.</p>
                 </div>
-                <button onClick={handleSyncScholarArticles} disabled={isSyncingScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">{isSyncingScholar ? 'Syncing...' : '🎓 Sync Scholar'}</button>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowManualAdd(true)} className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">📥 Add Manual</button>
+                  <button onClick={handleSyncScholarArticles} disabled={isSyncingScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">{isSyncingScholar ? 'Syncing...' : '🎓 Sync Scholar'}</button>
+                </div>
               </header>
               {data.articles.length === 0 ? (
                 <div className="py-24 text-center bg-slate-900/50 rounded-[2.5rem] border-2 border-dashed border-slate-800">
@@ -330,7 +351,7 @@ const App: React.FC = () => {
                 setActiveNoteId(null);
                 window.dispatchEvent(new CustomEvent('db-update'));
               }} 
-              onNavigateToArticle={handleOpenReader}
+              onNavigateToArticle={handleOpenReaderById}
               onNavigateToNetwork={(nid) => { setNetworkFocusId(nid); setCurrentTab('networks'); }} 
             />
           )}
@@ -352,13 +373,13 @@ const App: React.FC = () => {
               focusNodeId={networkFocusId} 
               onClearFocus={() => setNetworkFocusId(null)} 
               onUpdateArticle={handleUpdateArticle} 
-              onNavigateToArticle={handleOpenReader} 
+              onNavigateToArticle={handleOpenReaderById} 
               onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
             />
           )}
 
           {currentTab === 'topics' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="space-y-8">
               <header>
                 <h2 className="text-3xl font-bold">Research Trajectories</h2>
                 <p className="text-slate-400 mt-1">Define the domains and authors your assistant monitors.</p>
@@ -380,7 +401,7 @@ const App: React.FC = () => {
           )}
 
           {currentTab === 'portability' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="space-y-8">
               <header>
                 <h2 className="text-3xl font-bold">Data & Privacy</h2>
                 <p className="text-slate-400 mt-1">Manage your research trajectory backups and cloud synchronization.</p>
