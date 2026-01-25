@@ -284,21 +284,21 @@ export const geminiService = {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
     
-    const prompt = `CRITICAL TASK: Access the official Google Scholar citations profile for: "${targetIdentity}". 
+    const prompt = `CRITICAL TASK: Use the googleSearch tool to locate and access the Google Scholar citations profile for: "${targetIdentity}". 
     
-    IMPORTANT: Use the googleSearch tool to visit the profile. If provided a URL, visit it specifically.
+    IF the profile is found:
+    Visit the profile page and scrape the list of published research papers.
     
-    Extract a list of published research papers.
-    For each paper, extract:
+    FOR each paper found, extract:
     - title: Full title.
     - authors: Array of authors.
     - abstract: Brief summary.
     - year: 4-digit year.
     - citationCount: citations as integer.
-    - scholarUrl: Direct Google Scholar URL.
+    - scholarUrl: Direct Google Scholar URL for the paper.
     - tags: 2-3 keywords.
 
-    Return the final result ONLY as a JSON array of objects. Do not include markdown formatting like \`\`\`json.`;
+    Return the final result ONLY as a JSON array of objects. Do not include markdown blocks or any text other than the JSON array.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -310,6 +310,7 @@ export const geminiService = {
       });
       
       const text = response.text || '[]';
+      // More robust cleaning for potential markdown code blocks
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       const cleanedJson = jsonMatch ? jsonMatch[0] : text;
       
