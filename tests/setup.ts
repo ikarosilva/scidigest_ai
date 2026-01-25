@@ -1,4 +1,3 @@
-
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
@@ -75,9 +74,20 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 
 // Mock @google/genai
 vi.mock('@google/genai', () => {
+  const mockResponseJson = JSON.stringify({
+    title: "Test Paper",
+    term: "Neural Networks",
+    abstract: "Test Abstract",
+    definition: "A test definition.",
+    results: [],
+    tags: ["AI"],
+    newTopics: [],
+    references: ["Paper A", "Paper B"]
+  });
+
   const mockGenerateContent = vi.fn().mockResolvedValue({
-    text: '{"title": "Test Paper", "term": "Neural Networks", "abstract": "Test Abstract", "definition": "A test definition.", "results": [], "tags": ["AI"], "newTopics": []}',
-    candidates: [{ content: { parts: [{ text: '{"title": "Test Paper", "term": "Neural Networks", "abstract": "Test Abstract", "definition": "A test definition.", "results": [], "tags": ["AI"], "newTopics": []}' }] } }]
+    text: mockResponseJson,
+    candidates: [{ content: { parts: [{ text: mockResponseJson }] } }]
   });
 
   return {

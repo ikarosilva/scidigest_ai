@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed } from "../types";
 
@@ -11,14 +10,17 @@ const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 const extractJson = (text: string | undefined, fallback: any = {}) => {
   if (!text) return fallback;
   try {
-    const cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    // 1. Strip markdown code blocks if they exist
+    let cleanedText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    // 2. Find the first '{' or '[' and the last '}' or ']'
     const firstBrace = cleanedText.indexOf('{');
     const firstBracket = cleanedText.indexOf('[');
     
     let startIdx = -1;
     let endChar = '';
     
-    if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    if (firstBrace !== -1 && (firstBracket === -1 || (firstBrace < firstBracket && firstBrace !== -1))) {
       startIdx = firstBrace;
       endChar = '}';
     } else if (firstBracket !== -1) {
@@ -29,13 +31,13 @@ const extractJson = (text: string | undefined, fallback: any = {}) => {
     if (startIdx !== -1) {
       const lastIdx = cleanedText.lastIndexOf(endChar);
       if (lastIdx !== -1) {
-        return JSON.parse(cleanedText.substring(startIdx, lastIdx + 1));
+        cleanedText = cleanedText.substring(startIdx, lastIdx + 1);
       }
     }
     
     return JSON.parse(cleanedText);
   } catch (e) {
-    console.warn("JSON Parse Warning:", e);
+    console.warn("JSON Parse Warning in geminiService:", e);
     return fallback;
   }
 };
@@ -272,18 +274,18 @@ export const geminiService = {
   // Finds trending research papers using search grounding with Google Scholar focus
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Using Google Scholar via the googleSearch tool, find the most trending and impactful research papers from the last ${timeScale} related to: ${topics.join(', ')}. 
-    Prioritize papers with high citation velocity.
-    Return a JSON object with a "results" array of objects containing { title, authors (array), snippet, year, citationCount, heatScore (0-100), scholarUrl, source }.`;
+    const prompt = `Using the googleSearch tool to specifically scan Google Scholar, find the top 6 trending and most impactful research papers from the last ${timeScale} related to: ${topics.join(', ')}. 
+    Filter for papers with high citation velocity and recent academic buzz.
+    Return a JSON object with a "results" array of objects containing { title, authors (array), snippet, year, citationCount (integer), heatScore (0-100), scholarUrl, source }.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text, { results: [] });
+      const data = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { results: results.results || [], groundingSources };
+      return { results: data.results || [], groundingSources };
     } catch (error) {
       console.error("Trending Error:", error);
       return { results: [], groundingSources: [] };
@@ -301,9 +303,9 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text, { results: [] });
+      const data = extractJson(response.text, { results: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { results: results.results || [], groundingSources };
+      return { results: data.results || [], groundingSources };
     } catch (error) {
       console.error("Amazon Search Error:", error);
       return { results: [], groundingSources: [] };
@@ -344,9 +346,9 @@ export const geminiService = {
         contents: prompt,
         config: { tools: [{ googleSearch: {} }] }
       });
-      const results = extractJson(response.text, { references: [] });
+      const data = extractJson(response.text, { references: [] });
       const groundingSources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      return { references: results.references || [], groundingSources };
+      return { references: data.references || [], groundingSources };
     } catch (error) {
       console.error("Discover References Error:", error);
       return { references: [], groundingSources: [] };
