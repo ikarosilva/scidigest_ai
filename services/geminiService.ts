@@ -195,15 +195,17 @@ export const geminiService = {
       profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Broadly search the web for this name)' : ''
     ].filter(Boolean).join('\n');
 
-    const prompt = `You are a researcher's assistant. Discover primary research interests and academic focus based on the provided context.
-    
-    User context:
+    const prompt = `You are a researcher's expert agent. Your goal is to perform an exhaustive mapping of this individual's technical research interests and professional trajectories.
+
+    User Context:
     ${profileContext}
     
-    INSTRUCTIONS:
-    1. Perform a live Google Search for this individual's publications and topics.
-    2. Return a JSON array of technical research topics.
-    3. Provide at most 15 specific, high-quality strings.
+    STRICT INSTRUCTIONS:
+    1. Perform a live Google Search for this individual's academic output, university affiliations, and citations.
+    2. Analyze their most cited work and recent pre-prints to identify core trajectories.
+    3. PROVIDE A DIVERSE LIST. Even if some topics overlap with common terms, provide the most granular and specific technical labels possible.
+    4. Return exactly 20 high-quality technical interest strings as a JSON array.
+    5. Do not limit yourself to "new" topics; provide a full holistic map of their research identity.
     
     Return ONLY a JSON array.`;
 
@@ -284,21 +286,23 @@ export const geminiService = {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
     
-    const prompt = `CRITICAL TASK: Use the googleSearch tool to locate and access the Google Scholar citations profile for: "${targetIdentity}". 
+    const prompt = `URGENT TASK: Use the googleSearch tool to specifically locate and scrape the Google Scholar citations profile for: "${targetIdentity}". 
     
-    IF the profile is found:
-    Visit the profile page and scrape the list of published research papers.
+    Search Strategy:
+    1. Search for "Google Scholar citations profile for ${targetIdentity}".
+    2. If a URL containing "scholar.google.com/citations?user=" is found, access it directly.
+    3. Scrape the list of ALL publications shown on that profile page.
     
-    FOR each paper found, extract:
-    - title: Full title.
-    - authors: Array of authors.
-    - abstract: Brief summary.
-    - year: 4-digit year.
+    FOR each publication, extract:
+    - title: Full paper title.
+    - authors: Array of authors as strings.
+    - abstract: A brief 2-sentence summary (infer from search snippet if needed).
+    - year: 4-digit publication year.
     - citationCount: citations as integer.
     - scholarUrl: Direct Google Scholar URL for the paper.
-    - tags: 2-3 keywords.
+    - tags: 2-3 relevant keywords.
 
-    Return the final result ONLY as a JSON array of objects. Do not include markdown blocks or any text other than the JSON array.`;
+    Return the final result ONLY as a JSON array of objects. Do not include markdown code blocks or conversational text.`;
 
     try {
       const response = await ai.models.generateContent({
@@ -310,7 +314,6 @@ export const geminiService = {
       });
       
       const text = response.text || '[]';
-      // More robust cleaning for potential markdown code blocks
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       const cleanedJson = jsonMatch ? jsonMatch[0] : text;
       

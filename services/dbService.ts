@@ -6,7 +6,8 @@ const INTERESTS_KEY = 'scidigest_interests_v1';
 const FEEDS_KEY = 'scidigest_feeds_v1';
 const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.5.0';
+export const RELEASE_DATE = 'May 25, 2024';
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
@@ -90,7 +91,7 @@ export const dbService = {
       }
     }
 
-    parsed.articles = parsed.articles.map((a: any) => {
+    parsed.articles = (parsed.articles || []).map((a: any) => {
       // Migrate isInQueue to shelfIds
       if (a.isInQueue && (!a.shelfIds || a.shelfIds.length === 0)) {
         return { ...a, shelfIds: ['default-queue'], userReadTime: a.userReadTime || 0 };
@@ -98,7 +99,7 @@ export const dbService = {
       return { ...a, shelfIds: a.shelfIds || [], userReadTime: a.userReadTime || 0 };
     });
 
-    parsed.books = parsed.books.map((b: any) => {
+    parsed.books = (parsed.books || []).map((b: any) => {
       if (b.isInQueue && (!b.shelfIds || b.shelfIds.length === 0)) {
         return { ...b, shelfIds: ['default-queue'] };
       }
