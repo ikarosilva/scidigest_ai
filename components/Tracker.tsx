@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Article, FeedSourceType } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -109,7 +108,6 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
                 </p>
              </div>
              <div className="flex justify-center gap-8 py-4 border-t border-slate-800/50 mt-4">
-                <div className="flex justify-center gap-8 py-4 border-t border-slate-800/50 mt-4">
                 <div className="flex flex-col">
                    <span className="text-[10px] font-black uppercase text-slate-600 tracking-[0.2em]">Author Pins</span>
                    <span className="text-lg font-bold text-indigo-300">{trackedAuthors.length}</span>
@@ -160,9 +158,9 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
              ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-4 animate-pulse">
+          <div className="flex flex-col items-center gap-4">
              <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
-             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em]">Crawl in progress...</p>
+             <p className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.3em] animate-pulse">Crawl in progress...</p>
           </div>
         )}
       </section>
