@@ -1,9 +1,7 @@
-
-/// <reference types="vitest" />
-// Fix: Use defineConfig from 'vitest/config' to resolve the 'Cannot find type definition' error for Vitest.
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
+// Using defineConfig from vitest/config ensures the test property is properly typed without the need for manual reference directives
 export default defineConfig({
   plugins: [react()],
   test: {
