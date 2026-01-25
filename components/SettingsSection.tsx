@@ -1,7 +1,6 @@
-
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { AIConfig, RecommendationBias, SocialProfiles } from '../types';
-import InterestsManager from './InterestsManager';
+import { dbService } from '../services/dbService';
 
 interface SettingsSectionProps {
   aiConfig: AIConfig;
@@ -20,6 +19,8 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
   socialProfiles,
   onUpdateSocialProfiles
 }) => {
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
 
   const handleBiasChange = (bias: RecommendationBias) => {
     onUpdateAIConfig({ ...aiConfig, recommendationBias: bias });
@@ -33,6 +34,35 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
     onUpdateAIConfig({ ...aiConfig, feedbackUrl: e.target.value });
   };
 
+  const deletionManifest = useMemo(() => {
+    const data = dbService.getData();
+    const feeds = dbService.getFeeds();
+    return [
+      { label: 'Research Articles', count: data.articles.length, icon: '📄' },
+      { label: 'Reference Books', count: data.books.length, icon: '📚' },
+      { label: 'Technical Notes', count: data.notes.length, icon: '✍️' },
+      { label: 'Research Trajectories', count: interests.length, icon: '🎯' },
+      { label: 'Monitored Feeds', count: feeds.length, icon: '📡' },
+      { label: 'Library Shelves', count: data.shelves.length, icon: '📂' },
+    ];
+  }, [interests, showResetModal]);
+
+  const handleFinalReset = () => {
+    if (resetConfirmText.toUpperCase() === 'DELETE ALL DATA') {
+      dbService.factoryReset();
+    }
+  };
+
+  const handleEmergencyExport = () => {
+    const backup = dbService.exportFullBackup();
+    const blob = new Blob([backup], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `emergency_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+  };
+
   return (
     <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header>
@@ -43,6 +73,74 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
           Configure your research workflow preferences and AI discovery bias.
         </p>
       </header>
+
+      {/* Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-500/30 w-full max-w-xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 border-b border-slate-800 flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-black text-red-500 uppercase tracking-tight">Factory Reset Manifest</h3>
+                <p className="text-slate-500 text-xs mt-1">Review the data identified for permanent local deletion.</p>
+              </div>
+              <button onClick={() => setShowResetModal(false)} className="text-slate-500 hover:text-white transition-colors">✕</button>
+            </div>
+            
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-2 gap-4">
+                {deletionManifest.map((item) => (
+                  <div key={item.label} className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex items-center gap-4">
+                    <span className="text-2xl">{item.icon}</span>
+                    <div>
+                      <p className="text-lg font-black text-slate-200">{item.count}</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{item.label}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-red-500/5 border border-red-500/20 p-6 rounded-2xl space-y-3">
+                <p className="text-xs text-red-400 font-bold leading-relaxed">
+                  ⚠️ This action will purge all local data from this browser profile. Cloud synchronization will remain in Google Drive, but this local client will be returned to zero state.
+                </p>
+                <button 
+                  onClick={handleEmergencyExport}
+                  className="text-[10px] font-black uppercase text-indigo-400 hover:text-white flex items-center gap-2"
+                >
+                  📥 Export safety backup before deleting?
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block text-center">Type "DELETE ALL DATA" to confirm</label>
+                <input 
+                  type="text"
+                  value={resetConfirmText}
+                  onChange={(e) => setResetConfirmText(e.target.value)}
+                  className="w-full bg-slate-950 border border-red-500/20 rounded-2xl px-6 py-4 text-center text-sm font-black text-red-500 tracking-widest outline-none focus:ring-1 focus:ring-red-500"
+                  placeholder="CONFIRMATION PHRASE"
+                />
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setShowResetModal(false)}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 rounded-2xl transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleFinalReset}
+                  disabled={resetConfirmText.toUpperCase() !== 'DELETE ALL DATA'}
+                  className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-30 disabled:grayscale text-white font-black uppercase tracking-widest py-4 rounded-2xl shadow-xl shadow-red-600/20 transition-all"
+                >
+                  Execute Purge
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project & Support Configuration */}
       <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
@@ -141,19 +239,26 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
         </div>
       </section>
 
-      {/* Topics Summary Link */}
-      <section className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl opacity-80">
+      {/* System Maintenance */}
+      <section className="bg-red-500/5 border border-red-500/20 rounded-[2rem] p-8 shadow-xl">
         <div className="mb-6">
-          <h3 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-            <span>🎯</span> Research Topics
+          <h3 className="text-xl font-bold text-red-400 flex items-center gap-2">
+            <span>⚠️</span> System Maintenance
           </h3>
-          <p className="text-sm text-slate-500 mt-1">Configure your active research trajectories in the standalone Topics tab.</p>
+          <p className="text-sm text-slate-500 mt-1">Dangerous zone. Actions here are irreversible.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-           {interests.slice(0, 5).map(t => (
-             <span key={t} className="text-[10px] font-bold text-slate-500 bg-slate-950 border border-slate-800 px-3 py-1 rounded-full uppercase">{t}</span>
-           ))}
-           {interests.length > 5 && <span className="text-[10px] text-slate-600 italic self-center">+{interests.length - 5} more</span>}
+        
+        <div className="bg-slate-900/50 border border-red-500/10 p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+           <div className="space-y-1">
+              <p className="text-sm font-bold text-slate-200">Factory Reset Application</p>
+              <p className="text-xs text-slate-500">Permanently delete all research data, library entries, notes, and trajectories. Recommended for clean testing or starting fresh.</p>
+           </div>
+           <button 
+             onClick={() => setShowResetModal(true)}
+             className="w-full md:w-auto bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/30 px-8 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg hover:shadow-red-600/20"
+           >
+             Factory Reset
+           </button>
         </div>
       </section>
     </div>

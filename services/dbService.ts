@@ -1,4 +1,3 @@
-
 import { Article, Book, Note, FeedSourceType, Feed, AIConfig, AppState, SocialProfiles, Shelf, LogEntry } from '../types';
 
 const STORAGE_KEY = 'scidigest_data_v1';
@@ -322,5 +321,15 @@ export const dbService = {
       console.error("Import failed", e);
       return { success: false, upgraded: false };
     }
+  },
+  factoryReset: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(INTERESTS_KEY);
+    localStorage.removeItem(FEEDS_KEY);
+    localStorage.removeItem(AI_CONFIG_KEY);
+    localStorage.removeItem(SYNC_KEY_STORAGE);
+    localStorage.removeItem('scidigest_google_token');
+    localStorage.removeItem('scidigest_simulated_sync');
+    window.location.reload();
   }
 };
