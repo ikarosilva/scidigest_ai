@@ -88,6 +88,7 @@ export interface Article {
   notes: string;
   noteIds: string[];
   references?: string[]; 
+  groundingSources?: any[];
   userReadTime: number;
   estimatedReadTime?: number;
   shelfIds: string[];

@@ -232,8 +232,8 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     if (!article) return;
     setEnteringRabbitHole(true);
     try {
-      const refs = await geminiService.discoverReferences(article);
-      onUpdateArticle(article.id, { references: refs });
+      const { references, groundingSources } = await geminiService.discoverReferences(article);
+      onUpdateArticle(article.id, { references, groundingSources });
     } catch (err) {
       console.error(err);
       alert("Failed to enter Rabbit Hole. Ensure Search Grounding is available.");
@@ -263,6 +263,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           userReadTime: 0,
           pdfUrl: details.pdfUrl,
           shelfIds: ['default-queue'],
+          groundingSources: details.groundingSources,
           userReviews: {
             sentiment: 'Unknown',
             summary: 'Citation discovered via AI Rabbit Hole explorer.',
@@ -439,7 +440,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
   };
 
-  const containerClasses = `flex flex-col h-full space-y-4 animate-in fade-in duration-500 ${isMaximized ? 'fixed inset-0 z-[100] p-8 bg-slate-950' : ''}`;
+  const containerClasses = `flex flex-col h-full space-y-4 ${isMaximized ? 'fixed inset-0 z-[100] p-8 bg-slate-950' : ''}`;
 
   if (!article) {
     return (
@@ -489,7 +490,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                    onClick={() => handleTabToggle(tab.id)}
                    className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
                      isSidebarOpen && sidebarTab === tab.id 
-                       ? `bg-${tab.color}-600 text-white shadow-lg` 
+                       ? `bg-indigo-600 text-white shadow-lg` 
                        : 'text-slate-500 hover:text-slate-300'
                    }`}
                  >
@@ -540,10 +541,37 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
       </header>
 
       <div className="flex-1 flex gap-4 overflow-hidden relative">
-        {/* Intelligence Side Window (Now on the LEFT) */}
+        {/* Main PDF Content (Left Side - Maximized width) */}
+        <div className={`flex-1 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative ${getReaderClasses()}`}>
+          <div 
+            className="absolute inset-0 pointer-events-none z-10 transition-colors duration-500" 
+            style={getFilterStyle()}
+          />
+          
+          {article.pdfUrl ? (
+            <iframe 
+              src={`${article.pdfUrl}#toolbar=0`}
+              className={`w-full h-full border-none transition-all duration-500 ${readingMode === 'night' ? 'invert hue-rotate-180 brightness-90 contrast-110' : ''}`}
+              title={article.title}
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center bg-slate-950/50">
+              <div className="text-6xl mb-4">🔍</div>
+              <h4 className="text-xl font-bold text-slate-300">PDF Not Found</h4>
+              <button 
+                onClick={handleOpenExternal}
+                className="mt-6 bg-slate-800 hover:bg-slate-700 text-indigo-400 font-bold px-6 py-2.5 rounded-xl border border-indigo-500/20"
+              >
+                Search Scholarship
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Intelligence Side Window (Right Side - Controlled width) */}
         <div 
           className={`flex flex-col border border-slate-800 rounded-3xl overflow-hidden shadow-xl transition-all duration-300 ease-in-out ${
-            isSidebarOpen ? 'flex-[4] opacity-100' : 'w-0 opacity-0'
+            isSidebarOpen ? 'w-[400px] opacity-100' : 'w-0 opacity-0 pointer-events-none'
           } ${getReaderClasses()}`}
         >
           {isSidebarOpen && (
@@ -566,7 +594,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'lexicon' && (
-                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                  <div className="p-6 space-y-6 pb-20">
                     <div className="space-y-3">
                        <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Quick Term Lookup</label>
                        <div className="flex gap-2">
@@ -590,7 +618,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                     </div>
 
                     {lexiconResult ? (
-                      <div className="bg-slate-950/40 border border-indigo-500/20 rounded-2xl p-6 space-y-4 animate-in zoom-in-95 duration-300 shadow-inner">
+                      <div className="bg-slate-950/40 border border-indigo-500/20 rounded-2xl p-6 space-y-4 shadow-inner">
                          <div className="flex justify-between items-start">
                             <h4 className="text-lg font-black text-indigo-400 tracking-tight">{lexiconResult.term}</h4>
                             <span className="text-[8px] bg-indigo-500/20 text-indigo-500 px-2 py-0.5 rounded font-black uppercase tracking-widest">Scientific Definition</span>
@@ -705,7 +733,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'citations' && (
-                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                  <div className="p-6 space-y-6 pb-20">
                     <header className="bg-indigo-900/10 border border-indigo-500/20 p-4 rounded-2xl flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center text-xl shrink-0">🐇</div>
@@ -723,6 +751,19 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         </button>
                       )}
                     </header>
+
+                    {article.groundingSources && article.groundingSources.length > 0 && (
+                      <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-800 space-y-2">
+                        <p className="text-[10px] font-black text-slate-500 uppercase">Grounding Sources</p>
+                        {article.groundingSources.map((source: any, idx: number) => (
+                          source.web && (
+                            <a key={idx} href={source.web.uri} target="_blank" rel="noreferrer" className="block text-[10px] text-indigo-400 hover:underline truncate">
+                              {source.web.title || source.web.uri}
+                            </a>
+                          )
+                        ))}
+                      </div>
+                    )}
 
                     {article.references?.length ? (
                       <div className="space-y-3">
@@ -765,7 +806,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'quiz' && (
-                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                  <div className="p-6 space-y-6 pb-20">
                     {quizStep === 'intro' && (
                       <div className="text-center py-12 space-y-6">
                         <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center text-3xl mx-auto">🎓</div>
@@ -783,7 +824,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                     )}
 
                     {quizStep === 'active' && (
-                      <div className="space-y-8 animate-in fade-in duration-500">
+                      <div className="space-y-8">
                         {quizQuestions.map((q, qIdx) => (
                           <div key={qIdx} className="space-y-4">
                             <p className={`text-xs font-bold leading-relaxed ${getTextClasses()}`}>
@@ -817,7 +858,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                     )}
 
                     {quizStep === 'results' && (
-                      <div className="text-center py-12 space-y-8 animate-in zoom-in-95 duration-300">
+                      <div className="text-center py-12 space-y-8">
                         <div className={`w-24 h-24 rounded-full flex items-center justify-center mx-auto text-4xl shadow-2xl border-4 ${quizScore! >= 7 ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-red-500/10 border-red-500 text-red-400'}`}>
                            {quizScore! >= 7 ? '🏆' : '📚'}
                         </div>
@@ -837,7 +878,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'reviewer' && (
-                  <div className="p-6 space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+                  <div className="p-6 space-y-6 pb-20">
                     <header className="bg-red-900/10 border border-red-500/20 p-4 rounded-2xl flex items-center gap-4">
                       <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center text-xl shrink-0">👿</div>
                       <div>
@@ -861,7 +902,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                         <p className="text-[10px] text-red-400 font-black uppercase tracking-widest animate-pulse">Finding reasons to reject...</p>
                       </div>
                     ) : (
-                      <div className="space-y-4 animate-in fade-in duration-500">
+                      <div className="space-y-4">
                         <div className="bg-slate-950/60 border border-red-500/20 p-5 rounded-2xl text-xs text-slate-300 leading-relaxed whitespace-pre-line font-serif shadow-inner">
                           {reviewer2Output}
                         </div>
@@ -885,7 +926,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
 
                 {sidebarTab === 'intel' && (
-                  <div className="p-6 space-y-8 animate-in fade-in duration-300 pb-20">
+                  <div className="p-6 space-y-8 pb-20">
                     <section>
                        <h4 className="text-[10px] uppercase font-black text-slate-500 tracking-widest mb-4">Critical Appraisal</h4>
                        {!critique && !isCritiquing ? (
@@ -950,33 +991,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                 )}
               </div>
             </>
-          )}
-        </div>
-
-        {/* Main PDF Content (Now on the RIGHT) */}
-        <div className={`flex-1 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl relative transition-all duration-500 ${getReaderClasses()}`}>
-          <div 
-            className="absolute inset-0 pointer-events-none z-10 transition-colors duration-500" 
-            style={getFilterStyle()}
-          />
-          
-          {article.pdfUrl ? (
-            <iframe 
-              src={`${article.pdfUrl}#toolbar=0`}
-              className={`w-full h-full border-none transition-all duration-500 ${readingMode === 'night' ? 'invert hue-rotate-180 brightness-90 contrast-110' : ''}`}
-              title={article.title}
-            />
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-12 text-center bg-slate-950/50">
-              <div className="text-6xl mb-4">🔍</div>
-              <h4 className="text-xl font-bold text-slate-300">PDF Not Found</h4>
-              <button 
-                onClick={handleOpenExternal}
-                className="mt-6 bg-slate-800 hover:bg-slate-700 text-indigo-400 font-bold px-6 py-2.5 rounded-xl border border-indigo-500/20"
-              >
-                Search Scholarship
-              </button>
-            </div>
           )}
         </div>
       </div>

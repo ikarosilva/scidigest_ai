@@ -185,11 +185,10 @@ export const geminiService = {
     }
   },
 
-  // Optimized to use gemini-3-flash-preview for search to avoid Pro-Image 429 quota errors
   async fetchScholarArticles(profiles: SocialProfiles): Promise<Partial<Article>[]> {
     const targetIdentity = profiles.googleScholar || profiles.name;
     const ai = getAI();
-    const prompt = `Use the googleSearch tool to retrieve all publications from the following Google Scholar profile: "${targetIdentity}". Return JSON array.`;
+    const prompt = `Use the googleSearch tool to retrieve all publications from the following Google Scholar profile: "${targetIdentity}". Return as a plain text JSON array string.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -227,7 +226,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: 'application/json' }
+        config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -241,12 +240,12 @@ export const geminiService = {
    */
   async discoverInterestsFromProfiles(profiles: SocialProfiles): Promise<string[]> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, analyze these profiles and identify granular research trajectories and scientific interests for this researcher: ${JSON.stringify(profiles)}. Return JSON array of strings.`;
+    const prompt = `Using the googleSearch tool, analyze these profiles and identify granular research trajectories and scientific interests for this researcher: ${JSON.stringify(profiles)}. Return only a JSON array string.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -264,7 +263,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -282,7 +281,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -295,12 +294,12 @@ export const geminiService = {
    */
   async discoverAuthorNetwork(profiles: SocialProfiles): Promise<any> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, map the co-author network and research clusters for: ${profiles.name}. Return a JSON object with keys: nodes (array of {id, name, level, cluster}), links (array of {source, target}), clusters (array of {name, color}).`;
+    const prompt = `Using the googleSearch tool, map the co-author network and research clusters for: ${profiles.name}. Return a JSON-formatted response object with keys: nodes, links, clusters.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text || '{}');
     } catch (error) {
@@ -311,18 +310,24 @@ export const geminiService = {
   /**
    * Finds references for a given article using search grounding.
    */
-  async discoverReferences(article: Article): Promise<string[]> {
+  async discoverReferences(article: Article): Promise<{ references: string[], groundingSources: any[] }> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, find the primary references and cited works for the paper "${article.title}" by ${article.authors.join(', ')}. Return a JSON array of bibliographic strings.`;
+    const prompt = `Using the googleSearch tool, find the primary references and cited works for the paper "${article.title}" by ${article.authors.join(', ')}. Return them as a simple numbered list, one paper per line. Do not include any other text before or after the list.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '[]');
+      const text = response.text || "";
+      const refs = text.split('\n')
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(line => line.length > 5);
+      
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      return { references: refs, groundingSources: groundingChunks };
     } catch (error) {
-      return [];
+      return { references: [], groundingSources: [] };
     }
   },
 
@@ -336,7 +341,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: 'application/json' }
+        config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text || '{}');
     } catch (error) {
@@ -349,14 +354,16 @@ export const geminiService = {
    */
   async fetchArticleDetails(citationStr: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Using the googleSearch tool, find detailed metadata for the following citation: "${citationStr}". Return a JSON object with keys: title, authors (array), abstract, year, pdfUrl, citationCount, tags (array).`;
+    const prompt = `Using the googleSearch tool, find detailed metadata for the following citation: "${citationStr}". Provide a JSON-like block with keys: title, authors (array), abstract, year, pdfUrl, citationCount, tags (array).`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
-      return extractJson(response.text || '{}');
+      const metadata = extractJson(response.text || '{}', {});
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      return { ...metadata, groundingSources: groundingChunks };
     } catch (error) {
       return null;
     }
@@ -404,7 +411,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: 'application/json' }
+        config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text || '{}');
     } catch (error) {
@@ -422,7 +429,7 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: 'application/json' }
+        config: { responseMimeType: "application/json" }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -437,12 +444,12 @@ export const geminiService = {
     const ai = getAI();
     const prompt = `Using the googleSearch tool, search major scientific publishers (Nature, Science, Elsevier, Springer, Cell), pre-print servers (arXiv, bioRxiv, medRxiv), and academic blogs to find active RSS, Atom, or scientific news feeds relevant to these research interests: ${interests.join(', ')}. 
     Look specifically for direct RSS URLs or "latest paper" feed links.
-    Return a JSON array of objects with keys: name, url, description, type (e.g. Journal, Blog, Pre-print, Catalog).`;
+    Return only a JSON array string of objects with keys: name, url, description, type.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' }
+        config: { tools: [{ googleSearch: {} }] }
       });
       return extractJson(response.text || '[]');
     } catch (error) {
@@ -452,7 +459,7 @@ export const geminiService = {
 
   async getRadarUpdates(trackedPapers: string[], trackedAuthors: string[]): Promise<any[]> {
     const ai = getAI();
-    const prompt = `Act as an automated research radar. Find updates for: \nPapers: ${trackedPapers.join(', ')}\nAuthors: ${trackedAuthors.join(', ')}. Return JSON.`;
+    const prompt = `Using the googleSearch tool, act as an automated research radar. Find updates for: \nPapers: ${trackedPapers.join(', ')}\nAuthors: ${trackedAuthors.join(', ')}. Return only a JSON array string.`;
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',

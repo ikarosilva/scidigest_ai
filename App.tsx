@@ -143,6 +143,47 @@ const App: React.FC = () => {
     }
   };
 
+  const handleImportGoodReads = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/json';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event: any) => {
+        try {
+          const raw = JSON.parse(event.target.result);
+          const books: any[] = Array.isArray(raw) ? raw : (raw.books || []);
+          const existingIds = new Set(data.books.map(b => b.id));
+          
+          const newBooks: Book[] = books.map(b => ({
+            id: b.id || Math.random().toString(36).substr(2, 9),
+            title: b.title || 'Untitled Book',
+            author: b.author || b.authors?.join(', ') || 'Unknown Author',
+            rating: b.rating || b.user_rating || 0,
+            dateAdded: b.date_added || new Date().toISOString(),
+            amazonUrl: b.amazon_url || b.link,
+            description: b.description || b.summary,
+            shelfIds: [],
+            tags: b.tags || b.shelves || []
+          })).filter(b => !existingIds.has(b.id));
+
+          if (newBooks.length > 0) {
+            dbService.addBooks(newBooks);
+            setData(dbService.getData());
+            alert(`Successfully imported ${newBooks.length} books from GoodReads!`);
+          } else {
+            alert("No new books found to import.");
+          }
+        } catch (err) {
+          alert("Failed to parse GoodReads JSON. Ensure it is a valid array of book objects.");
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
   const handleUpdateArticle = (id: string, updates: Partial<Article>) => {
     const newData = dbService.updateArticle(id, updates);
     setData({ ...newData });
@@ -297,31 +338,53 @@ const App: React.FC = () => {
               <header className="flex justify-between items-center">
                 <div>
                   <h2 className="text-3xl font-bold text-slate-100">Research Library</h2>
-                  <p className="text-slate-400 mt-1">Managed ingestion of scientific literature.</p>
+                  <p className="text-slate-400 mt-1">Managed ingestion of scientific literature and references.</p>
                 </div>
                 <div className="flex gap-3">
+                  <button onClick={handleImportGoodReads} className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 transition-all">📖 GoodReads Import</button>
                   <button onClick={() => setShowManualAdd(true)} className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all">📥 Add Manual</button>
                   <button onClick={handleSyncScholarArticles} disabled={isSyncingScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all">{isSyncingScholar ? 'Syncing...' : '🎓 Sync Scholar'}</button>
                 </div>
               </header>
-              {data.articles.length === 0 ? (
+              {data.articles.length === 0 && data.books.length === 0 ? (
                 <div className="py-24 text-center bg-slate-900/50 rounded-[2.5rem] border-2 border-dashed border-slate-800">
                   <span className="text-6xl mb-6 block">📚</span>
                   <h3 className="text-xl font-bold text-slate-300">Library Empty</h3>
-                  <p className="text-slate-500 mt-2 max-w-sm mx-auto">Discover papers in the Feed or sync from Google Scholar to populate your research flight deck.</p>
+                  <p className="text-slate-500 mt-2 max-w-sm mx-auto">Discover papers in the Feed, sync from GoodReads, or use Google Scholar to populate your research flight deck.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {data.articles.map(a => (
-                    <ArticleCard 
-                      key={a.id} 
-                      article={a} 
-                      allNotes={data.notes} 
-                      onUpdate={handleUpdateArticle} 
-                      onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
-                      onRead={() => handleOpenReader(a)} 
-                    />
-                  ))}
+                <div className="space-y-12">
+                  {data.articles.length > 0 && (
+                    <section className="space-y-6">
+                      <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Scientific Articles</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {data.articles.map(a => (
+                          <ArticleCard 
+                            key={a.id} 
+                            article={a} 
+                            allNotes={data.notes} 
+                            onUpdate={handleUpdateArticle} 
+                            onNavigateToNote={(nid) => { setActiveNoteId(nid); setCurrentTab('notes'); }} 
+                            onRead={() => handleOpenReader(a)} 
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                  
+                  {data.books.length > 0 && (
+                    <section className="space-y-6">
+                      <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Books & References</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {data.books.map(b => (
+                          <BookCard 
+                            key={b.id} 
+                            book={b} 
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )}
                 </div>
               )}
             </div>
