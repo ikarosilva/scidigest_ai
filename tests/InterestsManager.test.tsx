@@ -34,7 +34,7 @@ describe('InterestsManager Component', () => {
     );
     const input = screen.getByPlaceholderText('e.g., Signal Processing');
     fireEvent.change(input, { target: { value: 'Bioinformatics' } });
-    fireEvent.submit(screen.getByText('Add'));
+    fireEvent.click(screen.getByRole('button', { name: /Add Topic/i }));
     
     expect(mockOnUpdateInterests).toHaveBeenCalledWith([...mockInterests, 'Bioinformatics']);
   });
@@ -65,7 +65,7 @@ describe('InterestsManager Component', () => {
     );
     const authorInput = screen.getByPlaceholderText(/Track author/i);
     fireEvent.change(authorInput, { target: { value: 'Yann LeCun' } });
-    const addButton = screen.getByRole('button', { name: 'Add' });
+    const addButton = screen.getByRole('button', { name: /Add Author/i });
     fireEvent.click(addButton);
     
     // Verifying it shows up in tracked authors (via mock dbService signal)

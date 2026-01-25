@@ -135,7 +135,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
               value={newAuthor}
               onChange={(e) => setNewAuthor(e.target.value)}
             />
-            <button type="submit" className="bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Add</button>
+            <button type="submit" aria-label="Add Author" className="bg-indigo-600/10 text-indigo-400 border border-indigo-600/20 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Add</button>
         </form>
       </div>
 
@@ -150,7 +150,7 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
               value={newInterest}
               onChange={(e) => setNewInterest(e.target.value)}
             />
-            <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase px-6 py-3 rounded-xl shadow-lg transition-all">Add</button>
+            <button type="submit" aria-label="Add Topic" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase px-6 py-3 rounded-xl shadow-lg transition-all">Add</button>
           </form>
         </div>
 

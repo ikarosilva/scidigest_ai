@@ -1,3 +1,4 @@
+
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
@@ -74,16 +75,10 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 
 // Mock @google/genai
 vi.mock('@google/genai', () => {
-  const mockResponseJson = JSON.stringify({
-    title: "Test Paper",
-    term: "Neural Networks",
-    abstract: "Test Abstract",
-    definition: "A test definition.",
-    results: [],
-    tags: ["AI"],
-    newTopics: [],
-    references: ["Paper A", "Paper B"]
-  });
+  // Use a fallback that can be parsed as both array and object if needed, 
+  // or handle based on prompt content in a more complex mock.
+  // For basic reliability, we return an array string since several tests expect rankings or lists.
+  const mockResponseJson = JSON.stringify([0, 1, 2]);
 
   const mockGenerateContent = vi.fn().mockResolvedValue({
     text: mockResponseJson,
