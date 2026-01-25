@@ -75,14 +75,38 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 
 // Mock @google/genai
 vi.mock('@google/genai', () => {
-  // Use a fallback that can be parsed as both array and object if needed, 
-  // or handle based on prompt content in a more complex mock.
-  // For basic reliability, we return an array string since several tests expect rankings or lists.
-  const mockResponseJson = JSON.stringify([0, 1, 2]);
+  const mockGenerateContent = vi.fn().mockImplementation((params) => {
+    // Detect expected return type based on prompt keywords
+    const contents = params.contents;
+    const prompt = typeof contents === 'string' 
+      ? contents 
+      : JSON.stringify(contents);
 
-  const mockGenerateContent = vi.fn().mockResolvedValue({
-    text: mockResponseJson,
-    candidates: [{ content: { parts: [{ text: mockResponseJson }] } }]
+    let data: any = [0, 1, 2]; // Default array for rankings
+
+    if (prompt.includes('Define the technical term') || prompt.includes('Analyze this scientific paper') || prompt.includes('Find detailed academic metadata')) {
+      data = { 
+        term: 'Neural Networks', 
+        title: 'Test Paper', 
+        abstract: 'Test Abstract',
+        definition: 'A system of hardware and/or software patterned after the operation of neurons in the human brain.',
+        researchContext: 'Fundamental to modern deep learning.',
+        relatedTopics: ['Deep Learning', 'AI'],
+        authors: ['Test Author'],
+        year: '2024'
+      };
+    } else if (prompt.includes('find the top 6 trending') || prompt.includes('Search for the highest rated technical books')) {
+      data = { results: [] };
+    } else if (prompt.includes('Identify which of these tags represent')) {
+      data = { tags: ['AI'], newTopics: [] };
+    }
+
+    const mockResponseJson = JSON.stringify(data);
+
+    return Promise.resolve({
+      text: mockResponseJson,
+      candidates: [{ content: { parts: [{ text: mockResponseJson }] } }]
+    });
   });
 
   return {
