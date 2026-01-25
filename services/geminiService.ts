@@ -27,7 +27,7 @@ export const geminiService = {
         contents: `Provide exactly one sentence explaining the core technical contribution of this paper: \nTitle: ${title}\nAbstract: ${abstract}`,
         config: { temperature: 0.3 }
       });
-      return response.text.trim();
+      return response.text || "";
     } catch (error) {
       console.error("QuickTake Error:", error);
       return "";
@@ -59,7 +59,7 @@ export const geminiService = {
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text;
+      return response.text || "";
     } catch (error) {
       console.error("Podcast Script Error:", error);
       return "";
@@ -94,7 +94,7 @@ export const geminiService = {
     }
   },
 
-  async whatIfAssistant(message: string, history: any[], article: Article) {
+  async whatIfAssistant(message: string, history: any[], article: Article): Promise<string> {
     const ai = getAI();
     const systemInstruction = `You are a brilliant and highly technical research colleague discussing "${article.title}". Abstract: ${article.abstract}`;
     try {
@@ -103,13 +103,13 @@ export const geminiService = {
         contents: [...history, { role: 'user', parts: [{ text: message }] }],
         config: { systemInstruction, temperature: 0.8 }
       });
-      return response.text;
+      return response.text || "";
     } catch (error) {
       return "I'm having trouble processing that hypothesis.";
     }
   },
 
-  async synthesizeResearch(articles: Article[], notes: string[]) {
+  async synthesizeResearch(articles: Article[], notes: string[]): Promise<string> {
     const ai = getAI();
     const context = articles.map(a => `PAPER: ${a.title}\nABSTRACT: ${a.abstract}`).join('\n\n');
     const prompt = `Synthesize these research papers into a scientific report. \n${context}\n${notes.join('\n')}`;
@@ -118,7 +118,7 @@ export const geminiService = {
         model: 'gemini-3-pro-preview',
         contents: prompt,
       });
-      return response.text;
+      return response.text || "";
     } catch (error) {
       return "An error occurred during multi-document synthesis.";
     }
@@ -141,13 +141,13 @@ export const geminiService = {
     }
   },
 
-  async summarizeArticle(title: string, abstract: string) {
+  async summarizeArticle(title: string, abstract: string): Promise<string> {
     const ai = getAI();
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Summarize in 3 bullets: \nTitle: ${title}\nAbstract: ${abstract}`,
     });
-    return response.text;
+    return response.text || "";
   },
 
   /**
@@ -311,7 +311,7 @@ export const geminiService = {
         model: 'gemini-3-flash-preview',
         contents: `${prompt}\n\nTitle: ${title}\nAbstract: ${abstract}`,
       });
-      return response.text;
+      return response.text || "";
     } catch (error) {
       return "";
     }
@@ -327,7 +327,7 @@ export const geminiService = {
         model: 'gemini-3-flash-preview',
         contents: `Provide a technical scientific critique of this paper, focusing on methodology and assumptions: \nTitle: ${title}\nAbstract: ${abstract}`,
       });
-      return response.text;
+      return response.text || "";
     } catch (error) {
       return "";
     }
