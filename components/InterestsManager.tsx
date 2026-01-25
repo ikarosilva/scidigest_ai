@@ -67,16 +67,17 @@ const InterestsManager: React.FC<InterestsManagerProps> = ({
       const existingLower = interests.map(i => i.toLowerCase());
       const filteredNew = suggestedInterests
         .filter(t => !existingLower.includes(t.toLowerCase()))
-        .slice(0, 10);
+        .slice(0, 15);
 
       if (filteredNew.length > 0) {
         onUpdateInterests([...interests, ...filteredNew]);
-        alert(`Discovered ${filteredNew.length} new research trajectories!`);
+        alert(`Discovered ${filteredNew.length} new granular research trajectories!`);
       } else {
-        alert("Gemini couldn't find any NEW research topics not already in your list.");
+        alert("Discovery session complete. Your trajectory list is already exhaustive and reflects your technical footprint.");
       }
     } catch (err) {
       console.error(err);
+      alert("AI Discovery encountered an error. Please check your connectivity and try again.");
     }
     setIsDiscovering(false);
   };

@@ -195,17 +195,17 @@ export const geminiService = {
       profiles.usePublicWebSearch ? '- Option Enabled: "User Public Web Search" (Broadly search the web for this name)' : ''
     ].filter(Boolean).join('\n');
 
-    const prompt = `You are a researcher's expert agent. Your goal is to perform an exhaustive mapping of this individual's technical research interests and professional trajectories.
+    const prompt = `You are an elite academic research scout. Your goal is to generate an EXHAUSTIVE and HOLISTIC technical knowledge map for this researcher based on the provided profile context.
 
     User Context:
     ${profileContext}
     
-    STRICT INSTRUCTIONS:
-    1. Perform a live Google Search for this individual's academic output, university affiliations, and citations.
-    2. Analyze their most cited work and recent pre-prints to identify core trajectories.
-    3. PROVIDE A DIVERSE LIST. Even if some topics overlap with common terms, provide the most granular and specific technical labels possible.
-    4. Return exactly 20 high-quality technical interest strings as a JSON array.
-    5. Do not limit yourself to "new" topics; provide a full holistic map of their research identity.
+    CRITICAL INSTRUCTIONS:
+    1. Perform a live Google Search for this individual's academic output, affiliations, and professional citations.
+    2. Analyze their most cited work and recent technical publications to identify core trajectories.
+    3. PROVIDE A DIVERSE AND GRANULAR LIST. Do not provide high-level terms (e.g., skip "AI" or "Medicine"). Provide specific research domains (e.g., "Non-invasive hemodynamics monitoring" or "Transformer-based protein folding").
+    4. Return EXACTLY 20 high-quality technical interest strings as a JSON array.
+    5. Do not worry about redundant topics; the system needs a complete holistic map of their research identity even if it overlaps with common existing interests.
     
     Return ONLY a JSON array.`;
 

@@ -6,8 +6,8 @@ const INTERESTS_KEY = 'scidigest_interests_v1';
 const FEEDS_KEY = 'scidigest_feeds_v1';
 const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
-export const APP_VERSION = '1.5.0';
-export const RELEASE_DATE = 'May 25, 2024';
+export const APP_VERSION = '1.5.1';
+export const RELEASE_DATE = 'May 26, 2024';
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
