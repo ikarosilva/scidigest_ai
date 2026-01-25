@@ -4,18 +4,36 @@ import { Article, Book, UserReviews, Sentiment, FeedSourceType, AIConfig, Social
 
 const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const extractJson = (text: string, fallback: any = []) => {
+const extractJson = (text: string, fallback: any = {}) => {
+  if (!text) return fallback;
   try {
-    // Look for JSON blocks in the text
-    const match = text.match(/\[[\s\S]*\]/); // Find the array
-    if (match) return JSON.parse(match[0]);
-    
-    const objMatch = text.match(/\{[\s\S]*\}/); // Find a single object
-    if (objMatch) return [JSON.parse(objMatch[0])];
+    // 1. Try to extract from Markdown code blocks first
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch && codeBlockMatch[1]) {
+      return JSON.parse(codeBlockMatch[1]);
+    }
 
+    // 2. Try to find the first valid JSON object or array structure
+    // We use a non-greedy search to find the boundaries of the first structure
+    const braceMatch = text.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (braceMatch) {
+      // Find the start of either { or [
+      const startIdx = text.search(/\{|\[/);
+      if (startIdx !== -1) {
+        const char = text[startIdx];
+        const endChar = char === '{' ? '}' : ']';
+        const lastIdx = text.lastIndexOf(endChar);
+        if (lastIdx !== -1) {
+          const jsonStr = text.substring(startIdx, lastIdx + 1);
+          return JSON.parse(jsonStr);
+        }
+      }
+    }
+    
+    // 3. Fallback to direct parse
     return JSON.parse(text);
   } catch (e) {
-    console.warn("JSON Parse Warning:", e);
+    console.warn("JSON Parse Warning for text:", text, e);
     return fallback;
   }
 };
@@ -259,13 +277,13 @@ export const geminiService = {
   },
 
   /**
-   * Retrieves trending research papers based on topics and timescale.
+   * Retrieves trending research papers specifically based on Google Scholar data.
    */
   async getTrendingResearch(topics: string[], timeScale: string): Promise<any> {
     const ai = getAI();
-    const prompt = `Use the googleSearch tool to find exactly 6 trending scientific research papers in these specific domains: ${topics.join(', ')} published within the last ${timeScale}. 
-    Focus on papers with high citation velocity or significant impact.
-    Return the results in a JSON array format where each object has these exact keys: title, authors (array of strings), snippet (1-2 sentence description), year (string), source (one of: ArXiv, Nature, Science, Cell, IEEE, etc), heatScore (0-100), citationCount (estimate), scholarUrl.
+    const prompt = `Use Google Scholar via the googleSearch tool to find exactly 6 trending scientific research papers in these specific domains: ${topics.join(', ')} published within the last ${timeScale}. 
+    Focus on papers with high citation velocity and significant impact.
+    Return the results in a JSON array format where each object has these exact keys: title, authors (array of strings), snippet (1-2 sentence description), year (string), source (Journal/Conference name), heatScore (0-100 based on velocity), citationCount (actual Google Scholar citation count), scholarUrl.
     Ensure you ONLY return the JSON array, no prose.`;
     
     try {

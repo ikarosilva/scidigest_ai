@@ -62,9 +62,9 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
     abstract: paper.snippet || paper.description || 'No snippet available.',
     date: `${paper.year || '2025'}-01-01`,
     year: paper.year || '2025',
-    source: (paper.source as any) || FeedSourceType.MANUAL,
+    source: (paper.source as any) || FeedSourceType.GOOGLE_SCHOLAR,
     rating: 5,
-    tags: ['Trending', ...selectedTopics.slice(0, 2)],
+    tags: ['Scholar Trending', ...selectedTopics.slice(0, 2)],
     isBookmarked: false,
     notes: `Added from trending research (Heat: ${paper.heatScore || 'N/A'}%)`,
     userReadTime: 0,
@@ -106,14 +106,14 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-2">
-            <span className={mode === 'papers' ? 'text-orange-500' : 'text-amber-500'}>
-              {mode === 'papers' ? '🔥' : '🛒'}
+            <span className={mode === 'papers' ? 'text-indigo-400' : 'text-amber-500'}>
+              {mode === 'papers' ? '🎓' : '🛒'}
             </span> 
-            {mode === 'papers' ? 'Global Trends' : 'Technical Marketplace'}
+            {mode === 'papers' ? 'Scholar Trends' : 'Technical Marketplace'}
           </h2>
           <p className="text-slate-400 mt-2">
             {mode === 'papers' 
-              ? "Crawl the global network for breakthroughs with high citation velocity."
+              ? "Crawl Google Scholar for publications with high citation velocity and trajectory-impact."
               : "Discover highly-rated monographs and textbooks currently trending."}
           </p>
         </div>
@@ -126,7 +126,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
                  mode === 'papers' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'
                }`}
              >
-               Papers
+               Scholar
              </button>
              <button 
                onClick={() => setMode('amazon')}
@@ -145,7 +145,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
               mode === 'papers' ? 'bg-indigo-600' : 'bg-amber-600'
             } text-white`}
           >
-            {loading ? 'Discovering...' : 'Refresh'}
+            {loading ? 'Analyzing Scholar...' : 'Sweep Repositories'}
           </button>
         </div>
       </header>
@@ -168,7 +168,7 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
       )}
 
       <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
-        <h3 className="text-[9px] uppercase font-black text-slate-600 tracking-widest mb-3">Topic Filters</h3>
+        <h3 className="text-[9px] uppercase font-black text-slate-600 tracking-widest mb-3">Trajectory Filters</h3>
         <div className="flex flex-wrap gap-2">
           {interests.map(topic => (
             <button
@@ -189,15 +189,15 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
       {loading ? (
         <div className="py-20 flex flex-col items-center justify-center gap-4">
           <div className={`w-10 h-10 border-2 rounded-full animate-spin ${mode === 'papers' ? 'border-indigo-500/20 border-t-indigo-500' : 'border-amber-500/20 border-t-amber-500'}`}></div>
-          <p className="text-slate-600 text-xs font-medium animate-pulse">Synthesizing current {mode === 'papers' ? 'breakthroughs' : 'market trends'}...</p>
+          <p className="text-slate-600 text-xs font-medium animate-pulse">Analyzing Google Scholar velocity for these trajectories...</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {(mode === 'papers' ? trending : amazonBooks).map((item, idx) => (
             <div key={idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-indigo-500/20 transition-all flex flex-col relative">
               <div className="flex justify-between items-start mb-4">
-                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${mode === 'papers' ? 'bg-orange-500/20 text-orange-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                  {mode === 'papers' ? `Impact Rank #${idx + 1}` : `Market Pick #${idx + 1}`}
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${mode === 'papers' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                  {mode === 'papers' ? `Impact #${idx + 1}` : `Market Pick #${idx + 1}`}
                 </span>
                 <span className="text-[10px] text-slate-600 font-bold">{item.year || '★ ' + (item.rating || 'N/A')}</span>
               </div>
@@ -208,7 +208,10 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-800/50">
                 <div className="flex items-center gap-4">
                   {mode === 'papers' ? (
-                    <div className="flex flex-col"><span className="text-[10px] font-bold text-indigo-400">{item.citationCount?.toLocaleString() || '---'}</span><span className="text-[9px] font-black text-slate-600 uppercase">Citations</span></div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-indigo-400">{item.citationCount?.toLocaleString() || '---'}</span>
+                      <span className="text-[9px] font-black text-slate-600 uppercase">Scholar Citations</span>
+                    </div>
                   ) : (
                     <span className="text-xs font-black text-emerald-400">{item.price || '---'}</span>
                   )}
@@ -250,8 +253,8 @@ const TrendingSection: React.FC<TrendingSectionProps> = ({ interests, onAdd, onR
           
           {(mode === 'papers' ? trending : amazonBooks).length === 0 && !loading && (
             <div className="col-span-full py-20 text-center bg-slate-900/20 rounded-2xl border border-dashed border-slate-800">
-              <p className="text-slate-600 text-sm">No {mode === 'papers' ? 'papers' : 'books'} found for these trajectories. Try expanding your search filters or refreshing.</p>
-              {!hasLoadedOnce && <button onClick={fetchData} className="mt-4 text-xs font-bold text-indigo-400 hover:underline">Trigger Initial Sweep</button>}
+              <p className="text-slate-600 text-sm">No Scholar entries found for these trajectories. Try expanding your search filters or refreshing.</p>
+              {!hasLoadedOnce && <button onClick={fetchData} className="mt-4 text-xs font-bold text-indigo-400 hover:underline">Trigger Scholar Sweep</button>}
             </div>
           )}
         </div>

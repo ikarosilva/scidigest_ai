@@ -76,8 +76,8 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 // Mock @google/genai
 vi.mock('@google/genai', () => {
   const mockGenerateContent = vi.fn().mockResolvedValue({
-    text: '{"title": "Test Paper", "abstract": "Test Abstract"}',
-    candidates: [{ content: { parts: [{ text: "Mock Response" }] } }]
+    text: '{"title": "Test Paper", "term": "Neural Networks", "abstract": "Test Abstract", "definition": "A test definition.", "results": [], "tags": ["AI"], "newTopics": []}',
+    candidates: [{ content: { parts: [{ text: '{"title": "Test Paper", "term": "Neural Networks", "abstract": "Test Abstract", "definition": "A test definition.", "results": [], "tags": ["AI"], "newTopics": []}' }] } }]
   });
 
   return {

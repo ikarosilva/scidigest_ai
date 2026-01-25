@@ -159,17 +159,18 @@ const App: React.FC = () => {
           const userInterests = dbService.getInterests();
           
           const newBooks: Book[] = rawBooks
-            .filter(b => b.book && b.read_status === 'read')
+            .filter(b => b && b.book && b.read_status === 'read')
             .map(b => {
+              // Inference: Find the interest that matches the book title most specifically (longest match)
               const matchedTopics = userInterests.filter(interest => 
                 b.book.toLowerCase().includes(interest.toLowerCase())
-              );
+              ).sort((x, y) => y.length - x.length);
 
               return {
                 id: Math.random().toString(36).substr(2, 9),
                 title: b.book,
                 author: b.author || b.user || 'Unknown Author',
-                rating: b.rating || 0,
+                rating: typeof b.rating === 'number' ? b.rating : (parseFloat(b.rating) || 0),
                 dateAdded: b.created_at || new Date().toISOString(),
                 amazonUrl: `https://www.amazon.com/s?k=${encodeURIComponent(b.book)}`,
                 description: b.review !== "(not provided)" ? b.review : (b.notes !== "(not provided)" ? b.notes : ""),
@@ -177,20 +178,20 @@ const App: React.FC = () => {
                 tags: [...matchedTopics, 'GoodReads Import']
               };
             })
-            // Only include books that match at least one interest
+            // Only include books that match at least one of your trajectories
             .filter(b => b.tags.some(tag => userInterests.includes(tag)))
             .filter(b => !existingTitles.has(b.title.toLowerCase().trim()));
 
           if (newBooks.length > 0) {
             dbService.addBooks(newBooks);
             setData(dbService.getData());
-            alert(`Successfully imported ${newBooks.length} books matched to your research trajectories!`);
+            alert(`Imported ${newBooks.length} books inferred to match your research trajectories!`);
           } else {
-            alert("No new read books found that match your current research topics.");
+            alert("No new 'read' books found that match your current research topics.");
           }
         } catch (err) {
           console.error("GoodReads Import Error:", err);
-          alert("Failed to parse GoodReads JSON. Check console for details.");
+          alert("Failed to parse GoodReads JSON. Ensure it matches the required export format.");
         }
       };
       reader.readAsText(file);
@@ -457,9 +458,11 @@ const App: React.FC = () => {
 
           {currentTab === 'topics' && (
             <div className="space-y-8">
-              <header>
-                <h2 className="text-3xl font-bold">Research Trajectories</h2>
-                <p className="text-slate-400 mt-1">Define the domains and authors your assistant monitors.</p>
+              <header className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-3xl font-bold text-slate-100">Research Trajectories</h2>
+                  <p className="text-slate-400 mt-1">Define the domains and authors your assistant monitors.</p>
+                </div>
               </header>
               <InterestsManager 
                 interests={interests} 
