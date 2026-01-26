@@ -1,6 +1,6 @@
 {
   "project": "SciDigest AI",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "meta": {
     "executive_summary": "SciDigest AI is a high-velocity environment for the ingestion, triage, and synthesis of scientific literature. It is designed to move researchers from 'Information Overload' to 'Methodological Mastery.'",
     "philosophy": "Local-first, adversarial intelligence, high-velocity ingestion. Single source of truth is plan.json.",

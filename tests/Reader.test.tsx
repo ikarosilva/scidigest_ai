@@ -22,7 +22,6 @@ describe('Reader Component', () => {
   const mockOnCreateNote = vi.fn();
   const mockOnUpdateArticle = vi.fn();
   const mockOnAddReadTime = vi.fn();
-  /* Fix: Added mockOnAddArticle for testing */
   const mockOnAddArticle = vi.fn();
 
   beforeEach(() => {
@@ -38,7 +37,6 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
-        /* Fix: Added missing onAddArticle prop */
         onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
@@ -46,7 +44,7 @@ describe('Reader Component', () => {
     expect(screen.getByText(/"Research Paper X"/)).toBeInTheDocument();
   });
 
-  it('switches between sidebar tabs (Notes, Lexicon, Quiz, etc.)', () => {
+  it('switches between top bar insight tabs (Quiz, Rabbit Hole, etc.)', () => {
     render(
       <Reader 
         article={mockArticle as any} 
@@ -55,22 +53,22 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
-        /* Fix: Added missing onAddArticle prop */
         onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );
     
-    const quizTab = screen.getByText('Quiz');
+    // Switch to Quiz Tab in Top Bar
+    const quizTab = screen.getByRole('button', { name: /Quiz/i });
     fireEvent.click(quizTab);
     expect(screen.getByText(/Generate 10-Question Quiz/i)).toBeInTheDocument();
     
-    const notesTab = screen.getByText('Notes');
-    fireEvent.click(notesTab);
-    expect(screen.getByPlaceholderText(/Start typing your Markdown annotations/i)).toBeInTheDocument();
+    // Verify Notes (Annotations) are visible in the Left Sidebar
+    expect(screen.getByText(/Annotations/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Start typing scientific insights/i)).toBeInTheDocument();
   });
 
-  it('toggles timer visibility', () => {
+  it('toggles timer visibility with correct accessibility titles', () => {
     render(
       <Reader 
         article={mockArticle as any} 
@@ -79,7 +77,6 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
-        /* Fix: Added missing onAddArticle prop */
         onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
@@ -88,6 +85,9 @@ describe('Reader Component', () => {
     const hideTimerButton = screen.getByTitle('Hide Timer');
     fireEvent.click(hideTimerButton);
     expect(screen.queryByText(/Session/i)).not.toBeInTheDocument();
+    
+    const showTimerButton = screen.getByTitle('Show Timer');
+    expect(showTimerButton).toBeInTheDocument();
   });
 
   it('toggles reading mode styling', () => {
@@ -99,15 +99,13 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
-        /* Fix: Added missing onAddArticle prop */
         onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );
     
-    const nightModeButton = screen.getByText('Night');
+    const nightModeButton = screen.getByText('N'); // 'N' for Night in the compact mode switcher
     fireEvent.click(nightModeButton);
-    // Fixed: getByTitle returns the root div itself in Reader.tsx.
     const readerContainer = screen.getByTitle('Research Paper X');
     expect(readerContainer).toHaveClass('bg-[#1a1110]');
   });

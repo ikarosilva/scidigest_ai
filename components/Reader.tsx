@@ -208,6 +208,11 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             Notes {isNotesCollapsed ? '▶' : '◀'}
           </button>
           <div className="h-4 w-px bg-slate-800 mx-1"></div>
+          <button 
+            onClick={() => setShowTimer(!showTimer)} 
+            className="p-1.5 hover:bg-white/10 rounded-lg text-xs"
+            title={showTimer ? "Hide Timer" : "Show Timer"}
+          >⏱️</button>
           <div className="flex bg-slate-800/50 p-1 rounded-lg">
             {(['default', 'paper', 'night'] as ReadingMode[]).map(m => (
               <button key={m} onClick={() => setReadingMode(m)} className={`px-2 py-1 text-[9px] font-black uppercase rounded ${readingMode === m ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>
@@ -233,13 +238,13 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             {sidebarTab === 'reviewer2' && (
               <div className="flex gap-6 items-start h-full">
                 <div className="shrink-0 space-y-2">
-                  <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Methodology Audit</h4>
+                  <h4 className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Reviewer 2 Protocol</h4>
                   <button 
                     onClick={handleRunAudit}
                     disabled={isAuditing}
                     className="w-full bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-black uppercase px-4 py-2 rounded-lg transition-all disabled:opacity-50"
                   >
-                    {isAuditing ? 'Auditing...' : 'Run Reviewer 2'}
+                    {isAuditing ? 'Auditing...' : 'Trigger Adversarial Audit'}
                   </button>
                   {auditResult && (
                     <button 
@@ -251,18 +256,19 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                   )}
                 </div>
                 <div className="flex-1 text-xs text-slate-400 italic font-serif leading-relaxed max-w-5xl overflow-y-auto pr-4 custom-scrollbar h-full">
-                  {auditResult || "Simulate an adversarial peer reviewer looking for methodological errors and biased assumptions. Click 'Run' to begin analysis."}
+                  {auditResult || "Simulate an adversarial peer reviewer looking for methodological errors and biased assumptions. Click 'Trigger Adversarial Audit' to begin analysis."}
                 </div>
               </div>
             )}
             {sidebarTab === 'whatif' && (
               <div className="flex gap-4 items-start h-full">
                 <div className="flex flex-col gap-2 w-72">
+                  <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">What If Assistant</h4>
                   <textarea 
                     value={whatIfInput}
                     onChange={(e) => setWhatIfInput(e.target.value)}
-                    placeholder="Ask a scenario question..."
-                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-[11px] text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 resize-none h-20"
+                    placeholder="What if this was applied to a different domain?"
+                    className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-[11px] text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500 resize-none h-16"
                   />
                   <div className="flex gap-2">
                     <button 
@@ -270,7 +276,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                       disabled={isExploring || !whatIfInput.trim()}
                       className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black uppercase py-2 rounded-lg disabled:opacity-50 transition-all"
                     >
-                      Explore
+                      Analyze Scenario
                     </button>
                     {whatIfResult && (
                       <button 
@@ -282,7 +288,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                     )}
                   </div>
                 </div>
-                <div className="flex-1 text-xs text-slate-500 italic leading-relaxed h-full overflow-y-auto pr-4 custom-scrollbar">
+                <div className="flex-1 text-xs text-slate-500 italic leading-relaxed h-full overflow-y-auto pr-4 custom-scrollbar pt-4">
                    {whatIfResult || "Explore hypothetical modifications: 'What if the sample size was doubled?' or 'What if this was applied to cross-platform datasets?'"}
                 </div>
               </div>
@@ -290,8 +296,9 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             {sidebarTab === 'rabbitHole' && (
               <div className="flex items-center gap-4 h-full overflow-hidden">
                  <div className="shrink-0 flex flex-col gap-2">
+                    <h4 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Rabbit Hole Discovery</h4>
                     <button onClick={handleDiscoverRabbitHole} disabled={isMining} className="bg-indigo-600/10 text-indigo-400 border border-indigo-500/20 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase whitespace-nowrap">
-                      {isMining ? 'Mining...' : '🔍 Discover Citations'}
+                      {isMining ? 'Mining...' : 'Discover Forward Citations'}
                     </button>
                     <p className="text-[9px] text-slate-600 uppercase font-black text-center">Grounding Active</p>
                  </div>
@@ -314,10 +321,10 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             {sidebarTab === 'quiz' && (
               <div className="flex items-center gap-8 h-full">
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-white">Competence Validation</h4>
+                  <h4 className="text-sm font-bold text-white">Generate 10-Question Quiz</h4>
                   <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">Dunning-Kruger Alignment</p>
                 </div>
-                <p className="text-xs text-slate-400 max-w-sm">Generate a randomized 10-Question proficiency quiz based on the technical methodology of this paper to validate your internalization of the material.</p>
+                <p className="text-xs text-slate-400 max-w-sm">Validate your technical internalization with an AI-generated proficiency validation based on methodology.</p>
                 <button className="bg-indigo-600 text-white text-[10px] font-black uppercase px-8 py-3 rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all">Generate Mastery Quiz</button>
               </div>
             )}
@@ -354,11 +361,14 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         )}
 
         {/* MAIN VIEW: PDF VIEWER */}
-        <main className="flex-1 bg-slate-900 relative flex flex-col overflow-hidden">
+        <main className="flex-1 bg-slate-900 relative flex flex-col overflow-y-auto custom-scrollbar" aria-label="PDF Viewer">
+          <div className="absolute top-2 right-4 z-10 px-2 py-1 bg-black/40 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
+            PDF Viewer Window
+          </div>
           {article.pdfUrl ? (
             <iframe 
               src={article.pdfUrl} 
-              className="w-full h-full border-none bg-white"
+              className="w-full min-h-full border-none bg-white"
               title="PDF Viewer"
               sandbox="allow-scripts allow-same-origin allow-popups"
             />
@@ -388,7 +398,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                Sovereignty: Local Encrypted
             </span>
             <div className="w-1 h-1 bg-slate-700 rounded-full"></div>
-            <span>v1.6.0 Protocol</span>
+            <span>v1.6.1 Protocol</span>
          </div>
          <div className="px-3 text-indigo-500/50">
             Analysis Engine: {sidebarTab === 'reviewer2' ? 'Reviewer 2' : sidebarTab === 'whatif' ? 'What If' : 'Citation Sonar'} Active
