@@ -90,11 +90,15 @@ export const dbService = {
     };
     const parsed = JSON.parse(data) as AppState;
     
-    // Automatic Log Reset & Version Sync
+    // Automatic Log Reset & Version Sync - AVOID calling addLog here to prevent recursion
     if (parsed.version !== APP_VERSION) {
-      dbService.addLog('info', `Version updated from ${parsed.version} to ${APP_VERSION}. Purging diagnostic buffer.`);
       parsed.version = APP_VERSION;
-      parsed.logs = []; 
+      parsed.logs = [{
+        version: APP_VERSION,
+        type: 'info',
+        date: new Date().toISOString(),
+        message: `System updated to ${APP_VERSION}. Diagnostic buffer purged.`
+      }]; 
     }
 
     if (!parsed.logs) parsed.logs = [];
@@ -129,7 +133,6 @@ export const dbService = {
     data.usageHistory = [event, ...(data.usageHistory || [])].slice(0, 200);
     dbService.saveData(data);
   },
-  // Added getUsageStats to resolve error in components/TelemetrySection.tsx
   getUsageStats: () => {
     const data = dbService.getData();
     const history = data.usageHistory || [];
@@ -151,13 +154,11 @@ export const dbService = {
     stats.avgLatency = totalLatency / history.length;
     return stats;
   },
-  // Added trackFeedbackSubmission to resolve error in components/FeedbackModal.tsx
   trackFeedbackSubmission: () => {
     const data = dbService.getData();
     data.feedbackSubmissions.push(new Date().toISOString());
     dbService.saveData(data);
   },
-  // Added getMonthlyFeedbackCount to resolve error in components/FeedbackModal.tsx
   getMonthlyFeedbackCount: (): number => {
     const data = dbService.getData();
     const now = new Date();
@@ -170,7 +171,6 @@ export const dbService = {
   },
   addLog: (type: 'error' | 'warning' | 'info' | 'debug', message: string, context?: any) => {
     const config = dbService.getAIConfig();
-    // System-wide debug filter
     if (type === 'debug' && !config.debugMode) return;
     
     const data = dbService.getData();
