@@ -1,6 +1,6 @@
+
 import React, { useState } from 'react';
 import { Article, Sentiment, Note, Shelf } from '../types';
-import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
 import { GoogleGenAI, Modality } from "@google/genai";
 
@@ -13,8 +13,6 @@ interface ArticleCardProps {
 }
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, onNavigateToNote, onRead }) => {
-  const [summary, setSummary] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showShelfMenu, setShowShelfMenu] = useState(false);
 
@@ -24,13 +22,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const matchedInterests = (article.tags || []).filter(tag => 
     interests.some(interest => tag.toLowerCase() === interest.toLowerCase())
   );
-
-  const handleSummarize = async () => {
-    setLoading(true);
-    const result = await geminiService.summarizeArticle(article.title, article.abstract);
-    setSummary(result || null);
-    setLoading(false);
-  };
 
   const handleListen = async () => {
     if (isPlaying) return;
@@ -124,12 +115,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
 
-      {summary && (
-        <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-lg mb-3 animate-in fade-in slide-in-from-top-1">
-           <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line">{summary}</p>
-        </div>
-      )}
-
       {/* Grounding Source Preview */}
       {hasGrounding && (
         <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
@@ -166,18 +151,11 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       <div className="flex flex-col gap-2 mt-auto relative">
         <div className="flex gap-2">
           <button 
-            onClick={handleSummarize}
-            disabled={loading}
-            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-2 rounded-lg transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Thinking...' : '⚡ AI Summary'}
-          </button>
-          <button 
             onClick={() => setShowShelfMenu(!showShelfMenu)}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-indigo-400"
+            className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-indigo-400"
             title="Manage Shelves"
           >
-            📂
+            Manage Shelves 📂
           </button>
           <button 
             onClick={handleListen}
@@ -189,7 +167,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
             onClick={onRead}
             className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800"
           >
-            📖
+            📖 Open Reader
           </button>
         </div>
 

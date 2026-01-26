@@ -66,19 +66,4 @@ describe('ArticleCard Component', () => {
     fireEvent.click(folderButton);
     expect(screen.getByText('Literature Shelves')).toBeInTheDocument();
   });
-
-  it('triggers AI Summary extraction', async () => {
-    render(
-      <ArticleCard 
-        article={mockArticle as any} 
-        allNotes={[]} 
-        onUpdate={mockOnUpdate} 
-        onNavigateToNote={mockOnNavigateToNote} 
-        onRead={mockOnRead} 
-      />
-    );
-    const summaryButton = screen.getByText('⚡ AI Summary');
-    fireEvent.click(summaryButton);
-    expect(summaryButton).toHaveTextContent('Thinking...');
-  });
 });

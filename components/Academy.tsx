@@ -1,5 +1,4 @@
-
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { 
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, 
   ResponsiveContainer, ScatterChart, Scatter, XAxis, YAxis, ZAxis, 
@@ -7,7 +6,6 @@ import {
 } from 'recharts';
 import { Article } from '../types';
 import { dbService } from '../services/dbService';
-import { geminiService } from '../services/geminiService';
 
 interface AcademyProps {
   articles: Article[];
@@ -17,64 +15,7 @@ interface AcademyProps {
 }
 
 const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, onRead }) => {
-  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState(false);
-  const [isPlayingPodcast, setIsPlayingPodcast] = useState(false);
-  const audioRef = useRef<AudioBufferSourceNode | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
   const interests = dbService.getInterests();
-
-  const handleGeneratePodcast = async () => {
-    const queuePapers = articles.filter(a => a.shelfIds.includes('default-queue')).slice(0, 3);
-    if (queuePapers.length === 0) {
-      alert("Add some papers to your Queue shelf first to generate a briefing.");
-      return;
-    }
-
-    setIsGeneratingPodcast(true);
-    try {
-      const script = await geminiService.generatePodcastScript(queuePapers);
-      const audioData = await geminiService.generatePodcastAudio(script);
-      
-      if (audioData) {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        audioCtxRef.current = audioContext;
-        
-        const binaryString = atob(audioData);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-
-        const dataInt16 = new Int16Array(bytes.buffer);
-        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.destination);
-        source.onended = () => {
-          setIsPlayingPodcast(false);
-          setIsGeneratingPodcast(false);
-        };
-        
-        audioRef.current = source;
-        source.start();
-        setIsPlayingPodcast(true);
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Failed to generate multi-speaker podcast.");
-      setIsGeneratingPodcast(false);
-    }
-  };
-
-  const stopPodcast = () => {
-    if (audioRef.current) {
-      audioRef.current.stop();
-      setIsPlayingPodcast(false);
-      setIsGeneratingPodcast(false);
-    }
-  };
 
   // The Dunning-Kruger Theoretical Data
   const dunningKrugerLine = useMemo(() => {
@@ -138,49 +79,15 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
           <h2 className="text-3xl font-bold text-slate-100 flex items-center gap-3">
             <span>🎓</span> Research Academy
           </h2>
-          <p className="text-slate-400 mt-1">Measuring mastery and generating multi-modal briefings.</p>
+          <p className="text-slate-400 mt-1">Measuring mastery and mapping conceptual competence.</p>
         </div>
         <div className="flex gap-4">
-           <button 
-            onClick={isPlayingPodcast ? stopPodcast : handleGeneratePodcast}
-            disabled={isGeneratingPodcast && !isPlayingPodcast}
-            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-3 shadow-xl ${
-              isPlayingPodcast 
-              ? 'bg-red-600 text-white animate-pulse' 
-              : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
-            }`}
-          >
-            {isGeneratingPodcast && !isPlayingPodcast ? (
-              <>
-                <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                Synthesizing Podcast...
-              </>
-            ) : isPlayingPodcast ? (
-              <>⏹️ Stop Briefing</>
-            ) : (
-              <>🎙️ Generate Daily Briefing</>
-            )}
-          </button>
            <div className="bg-slate-900 border border-slate-800 px-5 py-2 rounded-2xl flex flex-col items-center">
               <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Immersion Time</span>
               <span className="text-lg font-bold text-emerald-400">{(totalReadTime/60).toFixed(1)}m</span>
            </div>
         </div>
       </header>
-
-      {isPlayingPodcast && (
-        <div className="bg-emerald-950/30 border border-emerald-500/30 p-4 rounded-2xl flex items-center gap-4 animate-in slide-in-from-top-4">
-           <div className="flex gap-1 items-end h-8">
-              {[...Array(12)].map((_, i) => (
-                <div key={i} className="w-1.5 bg-emerald-500 rounded-full animate-bounce" style={{ height: `${Math.random() * 100}%`, animationDuration: `${0.5 + Math.random()}s` }}></div>
-              ))}
-           </div>
-           <div>
-              <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Now Streaming: SciDigest Research Podcast</p>
-              <p className="text-[10px] text-slate-500">Speakers: Joe (Senior PI) & Jane (Data Scientist)</p>
-           </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 shadow-xl flex flex-col items-center justify-center relative overflow-hidden">
@@ -237,7 +144,6 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
                     return null;
                   }}
                 />
-                {/* Theoretical Curve Line - High Visibility Light Cyan */}
                 <Line 
                    data={dunningKrugerLine} 
                    type="monotone" 
@@ -249,7 +155,6 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
                    activeDot={false} 
                    opacity={0.4}
                 />
-                {/* Actual User Data Points */}
                 <Scatter name="Topics" data={topicStats}>
                   {topicStats.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.passedQuizzes === 0 ? '#1e293b' : entry.dkX < 10 ? '#f87171' : entry.dkX < 30 ? '#fbbf24' : '#34d399'} strokeWidth={1} stroke="#fff" />
@@ -258,7 +163,6 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
               </ComposedChart>
             </ResponsiveContainer>
             
-            {/* Annotation Labels for DK curve stages - Light Cyan Visibility */}
             <div className="absolute top-[10%] left-[5%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest rotate-[-45deg]">Mount Ignorant</div>
             <div className="absolute bottom-[25%] left-[15%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest">Valley of Despair</div>
             <div className="absolute bottom-[40%] left-[60%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest rotate-[-15deg]">Slope of Enlightenment</div>

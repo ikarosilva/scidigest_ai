@@ -1,0 +1,266 @@
+{
+  "project": "SciDigest AI",
+  "version": "1.5.5",
+  "meta": {
+    "executive_summary": "SciDigest AI is a high-velocity environment for the ingestion, triage, and synthesis of scientific literature. It is designed to move researchers from 'Information Overload' to 'Methodological Mastery.'",
+    "philosophy": "Local-first, adversarial intelligence, high-velocity ingestion. Single source of truth is plan.json.",
+    "core_concepts": [
+      "Deep Ingestion: Split-pane PDF analysis with adversarial auditing and scenario exploration.",
+      "Intelligent Triage: RLHF-driven recommendation engine and knowledge mapping.",
+      "Knowledge Mapping: Conceptual graphs and Dunning-Kruger tracking."
+    ],
+    "safety_protocol": {
+      "no_silent_deletion": "Never delete a file without explicit user permission.",
+      "mandatory_checkpoint": "Request 'Full JSON Backup' before any structural pruning.",
+      "reversibility": "Document pruning processes for manual reversion.",
+      "privacy": "No API keys or PII written to log buffers."
+    }
+  },
+  "modules": [
+    {
+      "id": "reviewer_2",
+      "name": "Reviewer 2 Protocol",
+      "context": "Adversarial Methodology Audit",
+      "model": "gemini-3-pro-preview",
+      "triggers": [
+        {
+          "action": "Trigger Adversarial Audit",
+          "service_method": "geminiService.runReviewer2Audit",
+          "ui_location": "Reader Sidebar -> Reviewer 2 Tab"
+        },
+        {
+          "action": "Export to Notes",
+          "functionality": "Exports the critical report into a new Research Note linked to the article.",
+          "ui_location": "Reader Sidebar -> Reviewer 2 Tab (Post-result)"
+        }
+      ],
+      "tests": "tests/Reviewer2.test.tsx"
+    },
+    {
+      "id": "what_if",
+      "name": "What If Assistant",
+      "context": "Scenario Exploration",
+      "model": "gemini-3-pro-preview",
+      "triggers": [
+        {
+          "action": "Analyze Scenario",
+          "service_method": "geminiService.askWhatIf",
+          "ui_location": "Reader Sidebar -> What If Tab"
+        },
+        {
+          "action": "Export to Notes",
+          "functionality": "Exports the scenario implications into a new Research Note linked to the article.",
+          "ui_location": "Reader Sidebar -> What If Tab (Post-result)"
+        }
+      ],
+      "tests": "tests/WhatIf.test.tsx"
+    },
+    {
+      "id": "research_tracker",
+      "name": "Sonar Tracker",
+      "context": "Live Sonar for Citations and Bibliography Updates",
+      "model": "gemini-3-flash-preview",
+      "grounding": "googleSearch",
+      "triggers": [
+        {
+          "action": "Pinging Network",
+          "service_method": "geminiService.getRadarUpdates",
+          "ui_location": "Tracker Tab -> Top Header"
+        }
+      ],
+      "tests": "tests/Tracker.test.tsx"
+    },
+    {
+      "id": "trending_discovery",
+      "name": "Scholar Trends",
+      "context": "Direct Academic Repository Sweeping",
+      "model": "Semantic Scholar API / Gemini for Amazon",
+      "triggers": [
+        {
+          "action": "Sweep Repositories",
+          "service_method": "academicApiService.searchScholar",
+          "ui_location": "Trending Tab -> Top Header"
+        }
+      ]
+    },
+    {
+      "id": "library_management",
+      "name": "Scientific Library",
+      "context": "Organized Ingestion and Sovereignty",
+      "triggers": [
+        {
+          "action": "Sync Scholar",
+          "functionality": "Ingests all publications from a user profile into local library.",
+          "ui_location": "Library Section -> Header"
+        },
+        {
+          "action": "NotebookLM Export",
+          "functionality": "Generates a specialized analysis bundle for Google NotebookLM ingestion.",
+          "ui_location": "Library Section -> Floating Shelf Dock"
+        }
+      ],
+      "tests": "tests/LibrarySection.test.tsx"
+    },
+    {
+      "id": "rabbit_hole",
+      "name": "Rabbit Hole Explorer",
+      "context": "Citation Mining & Lineage Discovery",
+      "model": "gemini-3-flash-preview",
+      "grounding": "googleSearch",
+      "triggers": [
+        {
+          "action": "Discover Forward Citations",
+          "service_method": "geminiService.discoverReferences",
+          "ui_location": "Reader Sidebar -> Rabbit Hole Tab"
+        }
+      ],
+      "tests": "tests/RabbitHole.test.tsx"
+    },
+    {
+      "id": "ai_discovery",
+      "name": "AI Discovery",
+      "context": "Personalized Research Feed Cards",
+      "triggers": [
+        {
+          "action": "Generate Discovery Card",
+          "functionality": "Displays Source, Date, Title, 1-sentence Brief Description (QuickTake), and Matching Topics. Includes Queue (Shelf icon), Library Ingestion (Library icon), and Reader Launch (Reader icon). Entire card area triggers Reader.",
+          "ui_location": "Discovery Feed"
+        }
+      ]
+    },
+    {
+      "id": "quick_take",
+      "name": "Sprint QuickTake",
+      "context": "1-Sentence Technical Essence",
+      "model": "gemini-3-flash-preview",
+      "triggers": [
+        {
+          "action": "Generate Quick Take",
+          "service_method": "geminiService.generateQuickTake",
+          "ui_location": "Discovery Feed Cards"
+        }
+      ]
+    },
+    {
+      "id": "academy",
+      "name": "Research Academy",
+      "context": "Competence Mapping (Dunning-Kruger)",
+      "triggers": [
+        {
+          "action": "Generate 10-Question Quiz",
+          "functionality": "Validates deep internalization of methodology.",
+          "ui_location": "Reader Sidebar -> Quiz Tab"
+        }
+      ]
+    },
+    {
+      "id": "telemetry",
+      "name": "AI Usage",
+      "context": "Real-time cost and performance monitoring",
+      "triggers": [
+        {
+          "action": "Monitor AI Consumption",
+          "functionality": "Tracks token usage and estimated costs.",
+          "ui_location": "Sidebar -> AI Usage"
+        }
+      ]
+    },
+    {
+      "id": "synthesis",
+      "name": "Research Synthesis",
+      "context": "Cross-document thematic analysis",
+      "model": "gemini-3-pro-preview",
+      "triggers": [
+        {
+          "action": "Synthesize Literature",
+          "service_method": "geminiService.synthesizeResearch",
+          "ui_location": "Library Section -> Floating Shelf Dock -> Synthesis Button"
+        }
+      ]
+    },
+    {
+      "id": "diagnostics",
+      "name": "System Diagnostics",
+      "context": "Local-first error tracking and AI triage support",
+      "triggers": [
+        {
+          "action": "Generate AI Diagnostic",
+          "functionality": "Copies signed system state for external LLM triage.",
+          "ui_location": "Sidebar -> System Logs -> Copy for AI Analysis"
+        },
+        {
+          "action": "Run Integrity Suite",
+          "functionality": "Executes a sequence of automated health checks against critical zones (Data, AI, UX).",
+          "ui_location": "Sidebar -> System Logs -> Run Integrity Suite"
+        }
+      ]
+    },
+    {
+      "id": "metadata_ingestion",
+      "name": "Metadata Ingestion",
+      "context": "Structured lookup via DOI/arXiv/PDF",
+      "triggers": [
+        {
+          "action": "DOI/arXiv Lookup",
+          "service_method": "academicApiService.fetchFromCrossref/Arxiv",
+          "ui_location": "Manual Add Modal -> Lookup Tab"
+        },
+        {
+          "action": "PDF Extraction",
+          "service_method": "geminiService.extractMetadataFromPDF",
+          "ui_location": "Manual Add Modal -> PDF File Tab"
+        }
+      ]
+    }
+  ],
+  "infrastructure": {
+    "persistence": "localStorage (dbService)",
+    "security": "AES-GCM 256-bit Client-side encryption (cloudSyncService)",
+    "export_formats": ["JSON", "BibTeX", "Markdown"]
+  },
+  "quality_assurance": {
+    "critical_zones": [
+      {
+        "zone": "Data Sovereignty & Persistence",
+        "verification_points": [
+          "State survives browser refresh (localStorage)",
+          "AES-GCM client-side encryption for Cloud Sync",
+          "JSON backup/restore integrity",
+          "BibTeX standard compliance"
+        ]
+      },
+      {
+        "zone": "AI Ingestion & Analysis",
+        "verification_points": [
+          "Gemini Flash metadata extraction accuracy",
+          "Reviewer 2 adversarial logic depth",
+          "Search grounding URL visibility in UI",
+          "QuickTake technical precision"
+        ]
+      },
+      {
+        "zone": "Research UX",
+        "verification_points": [
+          "Bi-directional Reader timer/db sync",
+          "Rabbit Hole citation library-matching",
+          "Force-graph node stability",
+          "Academy Dunning-Kruger rank mapping"
+        ]
+      }
+    ],
+    "diagnostic_protocol": {
+      "signatures": {
+        "header": "--- SCI-DIGEST SYSTEM LOG DATA [vVERSION_NUMBER] ---",
+        "metadata": "METADATA: Exported=TIMESTAMP | DebugMode=BOOLEAN | BufferSize=INT",
+        "footer": "--- END OF LOG DATA ---"
+      },
+      "ai_reaction_steps": [
+        "Interrupt flow to acknowledge specific application version.",
+        "Verify DebugMode status from metadata.",
+        "Locate first [ERROR] or [WARNING] in the sequence.",
+        "Map context (CTX) to the source code file and line.",
+        "Propose immediate fix with a regression test plan."
+      ]
+    }
+  }
+}

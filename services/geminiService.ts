@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 import { Article, UserReviews, Sentiment, FeedSourceType, AIConfig, SocialProfiles, Feed, GeminiUsageEvent } from "../types";
 import { dbService } from "./dbService";
@@ -62,29 +61,6 @@ export const geminiService = {
     } catch (error: any) {
       reportUsage("QuickTake", modelName, null, start, false, { error: error.message });
       return "Technical summary unavailable.";
-    }
-  },
-
-  // Generates a tiered summary (TL;DR and 3 methodology bullets)
-  async summarizeArticle(title: string, abstract: string): Promise<string> {
-    const ai = getAI();
-    const start = Date.now();
-    const modelName = 'gemini-3-flash-preview';
-    const prompt = `Summarize this scientific paper for a senior researcher. 
-    Provide a "TL;DR" (1 sentence) and "CORE METHODOLOGY" (3 technical bullets). 
-    Focus on implementation details over broad goals. \n\nTITLE: ${title}\nABSTRACT: ${abstract}`;
-
-    try {
-      const response = await callWithRetry(() => ai.models.generateContent({
-        model: modelName,
-        contents: prompt
-      }));
-      const text = response.text || "";
-      reportUsage("Article Summary", modelName, response, start, true);
-      return text;
-    } catch (error: any) {
-      reportUsage("Article Summary", modelName, null, start, false, { error: error.message });
-      return "Summary engine offline.";
     }
   },
 
@@ -197,7 +173,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added synthesizeResearch to resolve error in Dashboard.tsx and SynthesisModal.tsx
   async synthesizeResearch(articles: Article[], noteContents: string[]): Promise<string> {
     const ai = getAI();
     const start = Date.now();
@@ -225,7 +200,63 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added discoverAuthorNetwork to resolve error in NetworkGraph.tsx
+  async runReviewer2Audit(article: Article, customPrompt?: string): Promise<string> {
+    const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-pro-preview';
+    const config = dbService.getAIConfig();
+    const systemPrompt = customPrompt || config.reviewer2Prompt;
+    
+    const prompt = `PAPER TITLE: ${article.title}\nABSTRACT: ${article.abstract}\n\n${systemPrompt}`;
+
+    try {
+      const response = await callWithRetry(() => ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: { 
+          thinkingConfig: { thinkingBudget: 8000 },
+          systemInstruction: SYSTEM_INSTRUCTIONS.RESEARCH_ASSISTANT
+        }
+      }));
+      const text = response.text || "";
+      reportUsage("Reviewer 2 Audit", modelName, response, start, true);
+      return text;
+    } catch (error: any) {
+      reportUsage("Reviewer 2 Audit", modelName, null, start, false, { error: error.message });
+      return "Adversarial audit failed to generate.";
+    }
+  },
+
+  async askWhatIf(article: Article, scenario: string): Promise<string> {
+    const ai = getAI();
+    const start = Date.now();
+    const modelName = 'gemini-3-pro-preview';
+    const prompt = `I am reading the paper: "${article.title}". 
+Abstract: ${article.abstract}
+
+Hypothetical Scenario/Question: ${scenario}
+
+Explore the implications of this scenario. How would it change the results, methodologies, or relevance of the paper? 
+Provide a deep technical analysis as an AI research colleague.`;
+
+    try {
+      const response = await callWithRetry(() => ai.models.generateContent({
+        model: modelName,
+        contents: prompt,
+        config: { 
+          thinkingConfig: { thinkingBudget: 4000 },
+          systemInstruction: SYSTEM_INSTRUCTIONS.RESEARCH_ASSISTANT
+        }
+      }));
+      const text = response.text || "";
+      reportUsage("What If Exploration", modelName, response, start, true);
+      return text;
+    } catch (error: any) {
+      reportUsage("What If Exploration", modelName, null, start, false, { error: error.message });
+      return "Hypothetical analysis failed.";
+    }
+  },
+
   async discoverAuthorNetwork(profiles: SocialProfiles): Promise<any> {
     const ai = getAI();
     const start = Date.now();
@@ -282,7 +313,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added discoverReferences to resolve error in NetworkGraph.tsx
   async discoverReferences(article: Article): Promise<{ references: string[], groundingSources: any[] }> {
     const ai = getAI();
     const start = Date.now();
@@ -320,7 +350,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added discoverScientificFeeds to resolve error in FeedsSection.tsx
   async discoverScientificFeeds(interests: string[]): Promise<any[]> {
     const ai = getAI();
     const start = Date.now();
@@ -359,68 +388,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added generatePodcastScript to resolve error in Academy.tsx
-  async generatePodcastScript(articles: Article[]): Promise<string> {
-    const ai = getAI();
-    const start = Date.now();
-    const modelName = 'gemini-3-pro-preview';
-    const prompt = `Generate a 2-minute technical briefing podcast script between two experts, Joe (Senior PI) and Jane (Data Scientist). 
-    Discuss the core contributions and implications of these ${articles.length} papers:
-    ${articles.map(a => `${a.title}: ${a.abstract}`).join('\n')}
-    Format the script clearly with speaker labels like 'Joe:' and 'Jane:'.`;
-
-    try {
-      const response = await callWithRetry(() => ai.models.generateContent({
-        model: modelName,
-        contents: prompt
-      }));
-      const text = response.text || "";
-      reportUsage("Podcast Script", modelName, response, start, true);
-      return text;
-    } catch (error: any) {
-      reportUsage("Podcast Script", modelName, null, start, false, { error: error.message });
-      return "Podcast script generation failed.";
-    }
-  },
-
-  // Fix: Added generatePodcastAudio to resolve error in Academy.tsx
-  async generatePodcastAudio(script: string): Promise<string> {
-    const ai = getAI();
-    const start = Date.now();
-    const modelName = 'gemini-2.5-flash-preview-tts';
-    
-    try {
-      const response = await callWithRetry(() => ai.models.generateContent({
-        model: modelName,
-        contents: [{ parts: [{ text: `TTS the following conversation:\n${script}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: [
-                {
-                  speaker: 'Joe',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }
-                },
-                {
-                  speaker: 'Jane',
-                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
-                }
-              ]
-            }
-          }
-        }
-      }));
-      const audioData = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data || "";
-      reportUsage("Podcast Audio", modelName, response, start, true);
-      return audioData;
-    } catch (error: any) {
-      reportUsage("Podcast Audio", modelName, null, start, false, { error: error.message });
-      throw error;
-    }
-  },
-
-  // Fix: Added getRadarUpdates to resolve error in Tracker.tsx
   async getRadarUpdates(trackedPapers: string[], trackedAuthors: string[]): Promise<any[]> {
     const ai = getAI();
     const start = Date.now();
@@ -463,7 +430,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added suggestTagsAndTopics to resolve error in ManualAddModal.tsx
   async suggestTagsAndTopics(title: string, abstract: string, existingInterests: string[]): Promise<{ tags: string[], newTopics: string[] }> {
     const ai = getAI();
     const start = Date.now();
@@ -495,7 +461,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added extractMetadataFromPDF to resolve error in ManualAddModal.tsx and tests
   async extractMetadataFromPDF(base64: string): Promise<any> {
     const ai = getAI();
     const start = Date.now();
@@ -533,7 +498,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added fetchArticleDetails to resolve error in ManualAddModal.tsx
   async fetchArticleDetails(url: string): Promise<Partial<Article> | null> {
     const ai = getAI();
     const start = Date.now();
@@ -569,7 +533,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added defineScientificTerm to resolve error in tests
   async defineScientificTerm(term: string, context: string): Promise<any> {
     const ai = getAI();
     const start = Date.now();
@@ -604,7 +567,6 @@ export const geminiService = {
     }
   },
 
-  // Fix: Added getTrendingResearch to resolve error in tests
   async getTrendingResearch(topics: string[], timescale: string): Promise<any> {
     const ai = getAI();
     const start = Date.now();

@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { AIConfig, GeminiUsageEvent } from '../types';
 import { dbService } from '../services/dbService';
@@ -12,9 +11,22 @@ const TelemetrySection: React.FC<TelemetrySectionProps> = ({ aiConfig }) => {
   const usageStats = useMemo(() => dbService.getUsageStats(), [aiConfig]);
   const data = dbService.getData();
   const usageHistory = data.usageHistory || [];
+  const logs = data.logs || [];
   
   const tokenLimit = aiConfig.monthlyTokenLimit || 1000000;
   const tokenUsagePercent = Math.min(100, ((usageStats.totalTokens as number) / (tokenLimit as number)) * 100);
+
+  const stabilityScore = useMemo(() => {
+    const errorCount = logs.filter(l => l.type === 'error').length;
+    const qaPassedCount = logs.filter(l => l.message.includes('[QA-PASSED]')).length;
+    
+    // Weighted scoring
+    let score = 100;
+    score -= errorCount * 10;
+    if (qaPassedCount > 0) score += 5; // Reward running the integrity suite
+    
+    return Math.max(0, Math.min(100, score));
+  }, [logs]);
 
   const chartData = useMemo(() => {
     return Object.entries(usageStats.byFeature)
@@ -27,11 +39,17 @@ const TelemetrySection: React.FC<TelemetrySectionProps> = ({ aiConfig }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
-      <header>
-        <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-          <span>📊</span> Usage & Telemetry
-        </h2>
-        <p className="text-slate-400 mt-1">Real-time ingestion analysis and Gemini API cost monitoring.</p>
+      <header className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+            <span>🤖</span> AI Usage
+          </h2>
+          <p className="text-slate-400 mt-1">Real-time ingestion analysis and Gemini API cost monitoring.</p>
+        </div>
+        <div className="bg-slate-900 border border-slate-800 px-6 py-2 rounded-2xl flex flex-col items-end">
+           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">System Stability</span>
+           <span className={`text-xl font-bold ${stabilityScore > 90 ? 'text-emerald-400' : 'text-amber-400'}`}>{stabilityScore}%</span>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -63,6 +81,7 @@ const TelemetrySection: React.FC<TelemetrySectionProps> = ({ aiConfig }) => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} layout="vertical" margin={{ left: 20 }}>
                 <XAxis type="number" hide />
+                {/* Fixed: changed 'fontWait' to 'fontWeight' */}
                 <YAxis dataKey="name" type="category" width={120} tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
                 <Tooltip 
                   cursor={{ fill: 'rgba(255,255,255,0.03)' }}

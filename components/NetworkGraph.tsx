@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Article, Note, Book, NetworkViewMode, SocialProfiles } from '../types';
@@ -13,6 +14,9 @@ interface NetworkGraphProps {
   onUpdateArticle: (id: string, updates: Partial<Article>) => void;
   onNavigateToArticle: (id: string) => void;
   onNavigateToNote: (id: string) => void;
+  authorNetworkData: any;
+  onSyncScholar: () => void;
+  isSyncingScholar: boolean;
 }
 
 const NetworkGraph: React.FC<NetworkGraphProps> = ({ 
@@ -23,17 +27,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
   onClearFocus,
   onUpdateArticle,
   onNavigateToArticle,
-  onNavigateToNote
+  onNavigateToNote,
+  authorNetworkData,
+  onSyncScholar,
+  isSyncingScholar
 }) => {
   const [viewMode, setViewMode] = useState<NetworkViewMode>('unified');
   const [isMining, setIsMining] = useState(false);
   const [miningProgress, setMiningProgress] = useState(0);
-  const [authorNetworkData, setAuthorNetworkData] = useState<any>(null);
   const fgRef = useRef<any>(null);
 
   const data = dbService.getData();
   const interests = dbService.getInterests();
-  const socialProfiles = data.socialProfiles;
 
   // Set initial zoom and focus if provided
   useEffect(() => {
@@ -46,26 +51,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     }
   }, [focusNodeId, fgRef.current, viewMode]);
 
-  const handleSyncScholar = async () => {
-    if (!socialProfiles.name) {
-      alert("Please enter your name in the Topics tab before syncing Scholar network.");
-      return;
+  // Handle local switches to author view if data arrives
+  useEffect(() => {
+    if (authorNetworkData && !isSyncingScholar) {
+      setViewMode('author');
     }
-    setIsMining(true);
-    try {
-      const data = await geminiService.discoverAuthorNetwork(socialProfiles);
-      if (data && data.nodes && data.nodes.length > 0) {
-        setAuthorNetworkData(data);
-        setViewMode('author');
-      } else {
-        alert("Could not discover author network. Ensure your name/scholar URL is correct and public.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error building research network.");
-    }
-    setIsMining(false);
-  };
+  }, [authorNetworkData]);
 
   // Process data into Graph format (Nodes & Links)
   const graphData = useMemo(() => {
@@ -78,7 +69,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     
     // Topic Nodes and Links mode
     if (viewMode === 'topics') {
-      // 1. Create nodes for all interests
       interests.forEach(topic => {
         const relatedArticles = articles.filter(a => a.tags.some(t => t.toLowerCase().includes(topic.toLowerCase())));
         nodes.push({
@@ -86,25 +76,19 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
           name: topic,
           type: 'topic',
           val: 15 + relatedArticles.length,
-          color: '#f43f5e' // Rose-500 for topics
+          color: '#f43f5e'
         });
       });
 
-      // 2. Create edges between topics if articles bridge them
       const edgeWeights: Record<string, { count: number; articles: string[] }> = {};
-      
       articles.forEach(article => {
         const articleTopics = interests.filter(topic => 
           article.tags.some(tag => tag.toLowerCase().includes(topic.toLowerCase()))
         );
-
-        // Generate pairs of topics linked by this article
         for (let i = 0; i < articleTopics.length; i++) {
           for (let j = i + 1; j < articleTopics.length; j++) {
             const pair = [articleTopics[i], articleTopics[j]].sort().join(' <-> ');
-            if (!edgeWeights[pair]) {
-              edgeWeights[pair] = { count: 0, articles: [] };
-            }
+            if (!edgeWeights[pair]) edgeWeights[pair] = { count: 0, articles: [] };
             edgeWeights[pair].count += 1;
             edgeWeights[pair].articles.push(article.title);
           }
@@ -114,27 +98,18 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       Object.entries(edgeWeights).forEach(([pair, info]) => {
         const [source, target] = pair.split(' <-> ');
         links.push({
-          source,
-          target,
-          type: 'bridging',
-          width: Math.min(info.count, 8),
+          source, target, type: 'bridging', width: Math.min(info.count, 8),
           name: `${info.count} shared papers`,
           color: `rgba(244, 63, 94, ${Math.min(0.1 + info.count * 0.1, 0.7)})`
         });
       });
-
       return { nodes, links };
     }
 
-    // Unified / Articles / Notes / Datasets logic
     const uniqueDatasets = new Set<string>();
     articles.forEach(a => {
       if (a.dataLocation) uniqueDatasets.add(a.dataLocation);
-      a.tags.forEach(t => {
-        if (t.toLowerCase().includes('data') || t.toLowerCase().includes('set')) {
-          uniqueDatasets.add(t);
-        }
-      });
+      a.tags.forEach(t => { if (t.toLowerCase().includes('data') || t.toLowerCase().includes('set')) uniqueDatasets.add(t); });
     });
 
     const isFilterActive = !!focusNodeId;
@@ -144,85 +119,32 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     if (viewMode === 'articles' || viewMode === 'unified' || viewMode === 'datasets') {
       articles.forEach((article: Article) => {
         if (allowedArticleIds && !allowedArticleIds.has(article.id)) return;
-
-        nodes.push({
-          id: article.id,
-          name: article.title,
-          type: 'article',
-          val: 10 + (article.noteIds.length * 5),
-          color: '#818cf8'
-        });
-
+        nodes.push({ id: article.id, name: article.title, type: 'article', val: 10 + (article.noteIds.length * 5), color: '#818cf8' });
         if (article.references) {
           article.references.forEach((refTitle: string) => {
             const target = articles.find((a: Article) => a.title.toLowerCase().includes(refTitle.toLowerCase()) || refTitle.toLowerCase().includes(a.title.toLowerCase()));
             if (target && (!allowedArticleIds || allowedArticleIds.has(target.id))) {
-              links.push({
-                source: article.id,
-                target: target.id,
-                type: 'citation',
-                color: 'rgba(129, 140, 248, 0.4)',
-                curvature: 0.2
-              });
+              links.push({ source: article.id, target: target.id, type: 'citation', color: 'rgba(129, 140, 248, 0.4)', curvature: 0.2 });
             }
           });
         }
-
         if (viewMode === 'datasets') {
-           if (article.dataLocation) {
-             links.push({
-               source: article.id,
-               target: `dataset-${article.dataLocation}`,
-               type: 'usage',
-               color: 'rgba(16, 185, 129, 0.3)'
-             });
-           }
-           article.tags.forEach(t => {
-             if (uniqueDatasets.has(t)) {
-                links.push({
-                  source: article.id,
-                  target: `dataset-${t}`,
-                  type: 'usage',
-                  color: 'rgba(16, 185, 129, 0.3)'
-                });
-             }
-           });
+           if (article.dataLocation) links.push({ source: article.id, target: `dataset-${article.dataLocation}`, type: 'usage', color: 'rgba(16, 185, 129, 0.3)' });
+           article.tags.forEach(t => { if (uniqueDatasets.has(t)) links.push({ source: article.id, target: `dataset-${t}`, type: 'usage', color: 'rgba(16, 185, 129, 0.3)' }); });
         }
       });
     }
 
     if (viewMode === 'datasets') {
-      uniqueDatasets.forEach(ds => {
-        nodes.push({
-          id: `dataset-${ds}`,
-          name: ds,
-          type: 'dataset',
-          val: 20,
-          color: '#10b981'
-        });
-      });
+      uniqueDatasets.forEach(ds => nodes.push({ id: `dataset-${ds}`, name: ds, type: 'dataset', val: 20, color: '#10b981' }));
     }
 
     if ((viewMode === 'unified' || viewMode === 'notes') && (!allowedArticleIds)) {
       notes.forEach((note: Note) => {
-        nodes.push({
-          id: note.id,
-          name: note.title,
-          type: 'note',
-          val: 8 + (note.articleIds.length * 3),
-          color: '#fbbf24'
-        });
-
+        nodes.push({ id: note.id, name: note.title, type: 'note', val: 8 + (note.articleIds.length * 3), color: '#fbbf24' });
         if (viewMode === 'unified') {
           note.articleIds.forEach((articleId: string) => {
-            if (articles.find((a: Article) => a.id === articleId)) {
-              links.push({
-                source: note.id,
-                target: articleId,
-                type: 'linked',
-                color: 'rgba(251, 191, 36, 0.3)'
-              });
-            }
+            if (articles.find((a: Article) => a.id === articleId)) links.push({ source: note.id, target: articleId, type: 'linked', color: 'rgba(251, 191, 36, 0.3)' });
           });
         }
       });
@@ -230,28 +152,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
 
     if (viewMode === 'unified' && !allowedArticleIds) {
       books.forEach((book: Book) => {
-        nodes.push({
-          id: book.id,
-          name: book.title,
-          type: 'book',
-          val: 12,
-          color: '#f59e0b'
-        });
-        
+        nodes.push({ id: book.id, name: book.title, type: 'book', val: 12, color: '#f59e0b' });
         articles.forEach(art => {
-           const sharedTag = art.tags.find(t => book.title.toLowerCase().includes(t.toLowerCase()));
-           if (sharedTag) {
-              links.push({
-                source: art.id,
-                target: book.id,
-                type: 'thematic',
-                color: 'rgba(245, 158, 11, 0.1)'
-              });
-           }
+           if (art.tags.find(t => book.title.toLowerCase().includes(t.toLowerCase()))) links.push({ source: art.id, target: book.id, type: 'thematic', color: 'rgba(245, 158, 11, 0.1)' });
         });
       });
     }
-
     return { nodes, links };
   }, [articles, notes, books, viewMode, focusNodeId, authorNetworkData, interests]);
 
@@ -259,21 +165,16 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
     if (isMining) return;
     setIsMining(true);
     setMiningProgress(0);
-
     const papersToMine = articles.filter((a: Article) => !a.references || a.references.length === 0);
     let count = 0;
-
     for (const article of papersToMine) {
       try {
         const { references, groundingSources } = await geminiService.discoverReferences(article);
         onUpdateArticle(article.id, { references, groundingSources });
-      } catch (e) {
-        console.error("Mining error for", article.title, e);
-      }
+      } catch (e) { console.error("Mining error for", article.title, e); }
       count++;
       setMiningProgress(Math.floor((count / papersToMine.length) * 100));
     }
-
     setIsMining(false);
     alert("Citation discovery complete. Network map updated.");
   };
@@ -313,13 +214,13 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
            
            <div className="flex gap-2">
              <button 
-               onClick={handleSyncScholar}
-               disabled={isMining}
+               onClick={onSyncScholar}
+               disabled={isSyncingScholar}
                className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                 isMining ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
+                 isSyncingScholar ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20'
                }`}
              >
-               {isMining && viewMode === 'author' ? 'Crawl & Cluster...' : '🎓 My Articles'}
+               {isSyncingScholar ? 'Crawl & Cluster...' : '🎓 Sync Scholar'}
              </button>
              <button 
                onClick={handleMineCitations}
@@ -328,7 +229,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                  isMining ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-slate-800 text-indigo-400 border border-indigo-500/20 hover:bg-slate-700'
                }`}
              >
-               {isMining && viewMode !== 'author' ? (
+               {isMining ? (
                  <>
                    <span className="w-3 h-3 border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
                    Mining... {miningProgress}%
@@ -440,7 +341,6 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
                    <div className="w-6 h-[2px] bg-rose-500/40"></div>
                    <span className="text-xs text-slate-300 font-medium">Shared Literature</span>
                 </div>
-                <p className="text-[9px] text-slate-500 italic mt-2">Thicker edges represent multi-disciplinary papers bridging two domains.</p>
              </div>
            ) : (
              <>

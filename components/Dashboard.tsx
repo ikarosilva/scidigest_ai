@@ -1,9 +1,7 @@
-
 import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import ForceGraph2D from 'react-force-graph-2d';
 import { Article } from '../types';
-import { geminiService } from '../services/geminiService';
 
 interface DashboardProps {
   articles: Article[];
@@ -14,9 +12,6 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNavigate, onRead, onUpdateArticle }) => {
-  const [briefing, setBriefing] = useState<string | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-
   // Process data for charts
   const tagCounts: Record<string, number> = {};
   articles.forEach((a: Article) => {
@@ -79,25 +74,6 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
     return `${mins}m ${seconds % 60}s`;
   };
 
-  const handleGenerateBriefing = async () => {
-    if (articles.length === 0) {
-      alert("Add some articles to your library first!");
-      return;
-    }
-    setIsGenerating(true);
-    const sample = articles.filter(a => a.shelfIds.includes('default-queue')).slice(0, 10);
-    const target = sample.length > 0 ? sample : articles.slice(0, 5);
-    
-    try {
-      const summary = await geminiService.synthesizeResearch(target, []);
-      setBriefing(summary || "No briefing could be generated.");
-    } catch (e) {
-      setBriefing("Error generating briefing. Please check your API key.");
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <header className="flex justify-between items-end">
@@ -107,13 +83,6 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={handleGenerateBriefing}
-            disabled={isGenerating}
-            className={`text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center gap-2 ${isGenerating ? 'bg-slate-700 animate-pulse' : 'bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-600/20'}`}
-          >
-            {isGenerating ? '🧬 Synthesizing...' : '🗞️ Daily Briefing'}
-          </button>
-          <button 
             onClick={() => onNavigate('feed')}
             className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold px-4 py-2 rounded-xl transition-all border border-slate-700"
           >
@@ -121,26 +90,6 @@ const Dashboard: React.FC<DashboardProps> = ({ articles, totalReadTime, onNaviga
           </button>
         </div>
       </header>
-
-      {briefing && (
-        <div className="bg-indigo-950/30 border border-indigo-500/30 p-8 rounded-3xl animate-in fade-in slide-in-from-top-4 duration-500 relative">
-          <button onClick={() => setBriefing(null)} className="absolute top-6 right-6 text-indigo-400 hover:text-white">✕</button>
-          <div className="flex items-center gap-3 mb-6">
-             <span className="text-2xl">🗞️</span>
-             <div>
-                <h3 className="text-xl font-bold text-indigo-300">Executive Intelligence Report</h3>
-                <p className="text-xs text-indigo-500 font-medium">Meta-analysis of your current reading queue</p>
-             </div>
-          </div>
-          <div className="prose prose-invert prose-indigo max-w-none text-indigo-100/80 text-sm leading-relaxed whitespace-pre-line font-serif italic">
-             {briefing}
-          </div>
-          <div className="mt-8 pt-4 border-t border-indigo-500/20 flex justify-between items-center">
-             <span className="text-[10px] text-indigo-500 font-black uppercase tracking-widest">Targeted Insights</span>
-             <button onClick={() => setBriefing(null)} className="text-[10px] text-indigo-300 hover:text-white font-bold uppercase underline">Close Briefing</button>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-slate-900 p-6 rounded-2xl shadow-sm border border-slate-800">

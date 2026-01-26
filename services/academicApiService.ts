@@ -118,5 +118,43 @@ export const academicApiService = {
       console.error("Scholar Search Error:", e);
       return [];
     }
+  },
+
+  /**
+   * Fetches all publications for an author by identifying them via Google Scholar URL or Name.
+   */
+  async fetchAuthorPapers(scholarUrlOrName: string): Promise<any[]> {
+    try {
+      let query = scholarUrlOrName;
+      // Extract user ID if it's a URL
+      if (scholarUrlOrName.includes('user=')) {
+        const urlParams = new URLSearchParams(scholarUrlOrName.split('?')[1]);
+        const userId = urlParams.get('user');
+        if (userId) query = userId;
+      }
+
+      // We use Semantic Scholar's author search as a robust structured alternative
+      const response = await fetch(`https://api.semanticscholar.org/graph/v1/author/search?query=${encodeURIComponent(query)}&fields=name,papers.title,papers.authors,papers.abstract,papers.year,papers.citationCount,papers.venue,papers.externalIds`);
+      
+      if (!response.ok) return [];
+      
+      const data = await response.json();
+      const author = data.data?.[0]; // Take the first best match
+      if (!author || !author.papers) return [];
+
+      return author.papers.map((paper: any) => ({
+        title: paper.title,
+        authors: (paper.authors || []).map((a: any) => a.name),
+        snippet: paper.abstract || 'Academic publication from profile.',
+        year: paper.year?.toString() || new Date().getFullYear().toString(),
+        citationCount: paper.citationCount || 0,
+        source: paper.venue || 'Google Scholar',
+        pdfUrl: paper.externalIds?.ArXiv ? `https://arxiv.org/pdf/${paper.externalIds.ArXiv}.pdf` : null,
+        scholarUrl: `https://www.semanticscholar.org/paper/${paper.paperId}`
+      }));
+    } catch (e) {
+      console.error("Fetch Author Papers Error:", e);
+      return [];
+    }
   }
 };

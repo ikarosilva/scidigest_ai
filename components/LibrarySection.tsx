@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Article, Book, Shelf, Note, FeedSourceType } from '../types';
 import ArticleCard from './ArticleCard';
@@ -16,7 +17,7 @@ interface LibrarySectionProps {
   onUpdateShelves: (shelves: Shelf[]) => void;
   onRead: (article: Article) => void;
   onNavigateToNote: (noteId: string) => void;
-  onNavigateToNetworks: () => void;
+  onSyncScholar: () => void;
   onShowManualAdd: () => void;
 }
 
@@ -31,7 +32,7 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
   onUpdateShelves,
   onRead, 
   onNavigateToNote,
-  onNavigateToNetworks,
+  onSyncScholar,
   onShowManualAdd
 }) => {
   const [activeShelfId, setActiveShelfId] = useState<string>('all');
@@ -148,7 +149,7 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
           <button onClick={handleGoodReadsImport} className="px-5 py-2 rounded-xl text-xs font-bold bg-amber-500/10 text-amber-500 border border-amber-500/20 hover:bg-amber-500/20 transition-all flex items-center gap-2">
             <span>📚</span> GoodReads
           </button>
-          <button onClick={onNavigateToNetworks} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-2">
+          <button onClick={onSyncScholar} className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-2">
             <span>🎓</span> Sync Scholar
           </button>
           <button onClick={onShowManualAdd} className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 transition-all flex items-center gap-2">

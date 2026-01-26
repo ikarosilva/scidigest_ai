@@ -22,6 +22,8 @@ describe('Reader Component', () => {
   const mockOnCreateNote = vi.fn();
   const mockOnUpdateArticle = vi.fn();
   const mockOnAddReadTime = vi.fn();
+  /* Fix: Added mockOnAddArticle for testing */
+  const mockOnAddArticle = vi.fn();
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -36,6 +38,8 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
+        /* Fix: Added missing onAddArticle prop */
+        onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );
@@ -51,6 +55,8 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
+        /* Fix: Added missing onAddArticle prop */
+        onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );
@@ -73,6 +79,8 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
+        /* Fix: Added missing onAddArticle prop */
+        onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );
@@ -91,6 +99,8 @@ describe('Reader Component', () => {
         onUpdateNote={mockOnUpdateNote}
         onCreateNote={mockOnCreateNote}
         onUpdateArticle={mockOnUpdateArticle}
+        /* Fix: Added missing onAddArticle prop */
+        onAddArticle={mockOnAddArticle}
         onAddReadTime={mockOnAddReadTime}
       />
     );

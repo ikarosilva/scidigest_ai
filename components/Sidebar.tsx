@@ -31,6 +31,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
       items: [
         { id: 'academy', label: 'Academy', icon: '🎓' },
         { id: 'networks', label: 'Networks', icon: '🕸️' },
+        { id: 'telemetry', label: 'AI Usage', icon: '🤖' },
       ]
     },
     {

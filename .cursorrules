@@ -2,17 +2,21 @@
 
 You are acting as a world-class senior frontend engineer and research assistant developer. Adhere to these rules for every modification:
 
+## 📜 Canonical Source of Truth (MANDATORY)
+- **Requirements Mapping**: Before starting any task, read `plan.json`. This is the canonical source for all module definitions, triggers, models, test associations, and quality protocols.
+- **Alignment**: Every new feature or UI action must be reflected in `plan.json` under the appropriate module.
+
 ## 🛡️ Quality & Verification (MANDATORY)
-- **Quality Manifest**: Before starting any task, read `quality.md` to understand the "Critical Zones".
-- **Diagnostic Triage**: If the user provides a log payload matching the signature in the "Blue Zone" of `quality.md`, strictly prioritize the **Mandatory AI Reaction Protocol** over feature requests. Identify the `APP_VERSION` and `ERROR` context immediately.
-- **Regression Check**: Ensure no existing feature is removed or broken.
-- **Test Alignment**: If a logical service (dbService, geminiService) is changed, update the corresponding `.test.ts` file immediately.
+- **Quality Manifest**: Consult the `quality_assurance` section in `plan.json` to understand the "Critical Zones" for regression testing.
+- **Diagnostic Triage**: If a log payload matching the signature defined in `plan.json` is provided, prioritize the **Mandatory AI Reaction Protocol**.
+- **Regression Check**: Ensure no existing feature listed in `plan.json` is removed or broken.
+- **Test Alignment**: If a logical service or trigger defined in `plan.json` is changed, update the corresponding test file immediately.
 
 ## 🧹 Lean Code Protocol (Safety First)
-- **NO SILENT DELETION**: Never delete a file without asking for explicit permission from the user first.
-- **MANDATORY CHECKPOINT**: Before performing any structural pruning (logic removal or file deletion), instruct the user to create a checkpoint by using the **"Full JSON Backup"** feature in the Settings tab. 
-- **REVERSIBILITY**: Ensure that any pruning process is documented in the chat so changes can be manually reverted if the user changes their mind.
-- **Context Management**: Scan files for unused variables/imports before finishing to keep the AI's context window clean.
+- **NO SILENT DELETION**: Never delete a file without explicit user permission.
+- **MANDATORY CHECKPOINT**: Before structural pruning, request the user to perform a **"Full JSON Backup"** in Settings. 
+- **REVERSIBILITY**: Document pruning processes in chat for manual reversion.
+- **Context Management**: Scan for unused variables/imports to keep the context clean.
 
 ## 🛠 Tech Stack & Patterns
 - **React 19**: Use functional components and modern hooks.
@@ -22,13 +26,13 @@ You are acting as a world-class senior frontend engineer and research assistant 
 
 ## 🎨 UI/UX Preferences
 - **Aesthetics**: Glassmorphism, smooth transitions (Tailwind `animate-in`), high-contrast typography.
-- **Icons**: Use Emojis consistently.
+- **Icons**: Use Emojis consistently as defined in `plan.json` or component headers.
 - **Feedback**: Provide loading states for all AI operations.
 
 ## 🧠 Intelligence Guidelines
 - **Grounding**: Always display URLs when using `googleSearch`.
 - **Telemetry**: Report usage to `dbService.trackUsage`.
-- **Adversarial Thinking**: Consider the "Reviewer 2" persona for feature robustness.
+- **Adversarial Thinking**: Use the "Reviewer 2" persona for logic validation.
 
 ## 📦 Version Control
 - **Permission Required**: Ask before increasing `APP_VERSION` in `dbService.ts`.
