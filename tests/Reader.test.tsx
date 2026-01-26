@@ -97,8 +97,8 @@ describe('Reader Component', () => {
     
     const nightModeButton = screen.getByText('Night');
     fireEvent.click(nightModeButton);
-    // Checking for a specific class or background change in the container
-    const readerContainer = screen.getByTitle('Research Paper X').parentElement;
+    // Fixed: getByTitle returns the root div itself in Reader.tsx.
+    const readerContainer = screen.getByTitle('Research Paper X');
     expect(readerContainer).toHaveClass('bg-[#1a1110]');
   });
 });

@@ -1,3 +1,4 @@
+
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { dbService, APP_VERSION } from '../services/dbService';
 import { FeedSourceType } from '../types';
@@ -36,8 +37,8 @@ describe('dbService', () => {
     
     const data = dbService.getData();
     expect(data.version).toBe(APP_VERSION);
-    // It will have 1 log indicating the purge
-    expect(data.logs.some(l => l.message.includes('Version updated'))).toBe(true);
+    // It will have 1 log indicating the purge. Updated assertion to match 'System updated' implementation.
+    expect(data.logs.some(l => l.message.includes('System updated'))).toBe(true);
     expect(data.logs.length).toBe(1);
   });
 

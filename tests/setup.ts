@@ -96,7 +96,12 @@ vi.mock('@google/genai', () => {
     // Broaden matching to be less brittle
     const p = prompt.toLowerCase();
     
-    if (
+    if (p.includes('rank these new candidates')) {
+      data = [
+        { index: 0, matchedTopics: ['AI'] },
+        { index: 1, matchedTopics: ['Signal Processing'] }
+      ];
+    } else if (
       p.includes('define') || 
       p.includes('summarize') || 
       p.includes('metadata') ||
