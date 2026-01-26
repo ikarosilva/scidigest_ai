@@ -215,7 +215,13 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           >⏱️</button>
           <div className="flex bg-slate-800/50 p-1 rounded-lg">
             {(['default', 'paper', 'night'] as ReadingMode[]).map(m => (
-              <button key={m} onClick={() => setReadingMode(m)} className={`px-2 py-1 text-[9px] font-black uppercase rounded ${readingMode === m ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}>
+              <button 
+                key={m} 
+                onClick={() => setReadingMode(m)} 
+                title={`${m.charAt(0).toUpperCase() + m.slice(1)} Mode`}
+                aria-label={`${m.charAt(0).toUpperCase() + m.slice(1)} Mode`}
+                className={`px-2 py-1 text-[9px] font-black uppercase rounded ${readingMode === m ? 'bg-indigo-600 text-white' : 'text-slate-500'}`}
+              >
                 {m.charAt(0)}
               </button>
             ))}

@@ -32,14 +32,14 @@ describe('Reviewer 2 Adversarial Audit', () => {
       />
     );
     
-    // Switch to Reviewer 2 tab (Default is already reviewer2, but let's be explicit)
+    // Switch to Reviewer 2 tab
     const reviewerTab = screen.getByRole('button', { name: /Reviewer 2/i });
     fireEvent.click(reviewerTab);
     
-    // Check content is visible
+    // Check content header is visible
     expect(await screen.findByText(/Reviewer 2 Protocol/i)).toBeInTheDocument();
     
-    // Trigger audit
+    // Trigger audit via explicit button role
     const triggerButton = screen.getByRole('button', { name: /Trigger Adversarial Audit/i });
     fireEvent.click(triggerButton);
     

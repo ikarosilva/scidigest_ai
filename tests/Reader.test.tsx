@@ -104,7 +104,8 @@ describe('Reader Component', () => {
       />
     );
     
-    const nightModeButton = screen.getByText('N'); // 'N' for Night in the compact mode switcher
+    // Use robust aria-label for selection to avoid issues with compact text content
+    const nightModeButton = screen.getByRole('button', { name: /Night Mode/i });
     fireEvent.click(nightModeButton);
     const readerContainer = screen.getByTitle('Research Paper X');
     expect(readerContainer).toHaveClass('bg-[#1a1110]');
