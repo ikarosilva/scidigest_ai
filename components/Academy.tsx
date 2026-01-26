@@ -207,12 +207,12 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
              </div>
              <div className="flex gap-4">
                 <div className="flex items-center gap-2">
-                   <div className="w-2 h-[1px] bg-slate-700"></div>
-                   <span className="text-[8px] font-black text-slate-600 uppercase">Theoretical Curve</span>
+                   <div className="w-2 h-[1px] bg-cyan-500/30"></div>
+                   <span className="text-[8px] font-black text-slate-500 uppercase">Theoretical Curve</span>
                 </div>
                 <div className="flex items-center gap-2">
                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                   <span className="text-[8px] font-black text-slate-600 uppercase">Your Position</span>
+                   <span className="text-[8px] font-black text-slate-500 uppercase">Your Position</span>
                 </div>
              </div>
           </div>
@@ -237,15 +237,17 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
                     return null;
                   }}
                 />
-                {/* Theoretical Curve Line */}
+                {/* Theoretical Curve Line - High Visibility Light Cyan */}
                 <Line 
                    data={dunningKrugerLine} 
                    type="monotone" 
                    dataKey="dkY" 
-                   stroke="#1e293b" 
+                   stroke="#22d3ee" 
                    strokeWidth={2} 
+                   strokeDasharray="4 4"
                    dot={false} 
                    activeDot={false} 
+                   opacity={0.4}
                 />
                 {/* Actual User Data Points */}
                 <Scatter name="Topics" data={topicStats}>
@@ -256,11 +258,11 @@ const Academy: React.FC<AcademyProps> = ({ articles, totalReadTime, onNavigate, 
               </ComposedChart>
             </ResponsiveContainer>
             
-            {/* Annotation Labels for DK curve stages */}
-            <div className="absolute top-[10%] left-[5%] text-[8px] font-black text-slate-800 uppercase tracking-widest rotate-[-45deg]">Mount Ignorant</div>
-            <div className="absolute bottom-[25%] left-[15%] text-[8px] font-black text-slate-800 uppercase tracking-widest">Valley of Despair</div>
-            <div className="absolute bottom-[40%] left-[60%] text-[8px] font-black text-slate-800 uppercase tracking-widest rotate-[-15deg]">Slope of Enlightenment</div>
-            <div className="absolute top-[20%] right-[5%] text-[8px] font-black text-slate-800 uppercase tracking-widest">Plateau of Sustainability</div>
+            {/* Annotation Labels for DK curve stages - Light Cyan Visibility */}
+            <div className="absolute top-[10%] left-[5%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest rotate-[-45deg]">Mount Ignorant</div>
+            <div className="absolute bottom-[25%] left-[15%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest">Valley of Despair</div>
+            <div className="absolute bottom-[40%] left-[60%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest rotate-[-15deg]">Slope of Enlightenment</div>
+            <div className="absolute top-[20%] right-[5%] text-[8px] font-black text-cyan-400/50 uppercase tracking-widest">Plateau of Sustainability</div>
           </div>
           <div className="mt-4 flex justify-between text-[10px] font-bold text-slate-600 uppercase tracking-widest">
              <span>Little Experience</span>

@@ -1,4 +1,3 @@
-
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
@@ -76,29 +75,48 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 // Mock @google/genai
 vi.mock('@google/genai', () => {
   const mockGenerateContent = vi.fn().mockImplementation((params) => {
-    // Detect expected return type based on prompt keywords
     const contents = params.contents;
     const prompt = typeof contents === 'string' 
       ? contents 
       : JSON.stringify(contents);
 
-    let data: any = [0, 1, 2]; // Default array for rankings
+    // Default to rank structure as it's the most common failure point
+    let data: any = [
+      { index: 0, matchedTopics: ['AI'] },
+      { index: 1, matchedTopics: ['Signal Processing'] }
+    ];
 
-    if (prompt.includes('Define "') || prompt.includes('Analyze this scientific paper') || prompt.includes('academic metadata for')) {
+    if (
+      prompt.includes('Define "') || 
+      prompt.includes('Analyze this scientific paper') || 
+      prompt.includes('academic metadata') ||
+      prompt.includes('Extract core academic metadata')
+    ) {
       data = { 
         term: 'Neural Networks', 
-        title: 'Test Paper', 
-        abstract: 'Test Abstract',
-        definition: 'A system of hardware and/or software patterned after the operation of neurons in the human brain.',
-        researchContext: 'Fundamental to modern deep learning.',
+        title: 'Mock Research Paper', 
+        abstract: 'This is a mock abstract for testing metadata extraction.',
+        definition: 'A computational model inspired by biological neurons.',
+        researchContext: 'Fundamental to deep learning systems.',
         relatedTopics: ['Deep Learning', 'AI'],
         authors: ['Test Author'],
-        year: '2024'
+        year: 2024, // Must be integer per schema
+        tags: ['AI', 'Machine Learning']
       };
-    } else if (prompt.includes('trending papers on') || prompt.includes('Search highest rated books')) {
-      data = { results: [] };
-    } else if (prompt.includes('Identify which of these tags represent')) {
-      data = { tags: ['AI'], newTopics: [] };
+    } else if (prompt.includes('trending papers') || prompt.includes('highly trending papers')) {
+      data = { 
+        results: [
+          { title: 'Trending Paper 1', authors: ['Author A'], year: '2024', snippet: 'Insight', citationCount: 100 }
+        ] 
+      };
+    } else if (prompt.includes('Search Amazon') || prompt.includes('Search highest rated books')) {
+      data = { 
+        books: [
+          { title: 'Mock Book', author: 'Author B', price: '$50', rating: 4.5, amazonUrl: '#', description: 'Description' }
+        ] 
+      };
+    } else if (prompt.includes('Identify which of these tags represent') || prompt.includes('suggest a list of 5 granular technical tags')) {
+      data = { tags: ['AI', 'Neural Networks'], newTopics: ['Quantum AI'] };
     }
 
     const mockResponseJson = JSON.stringify(data);
@@ -125,6 +143,7 @@ vi.mock('@google/genai', () => {
       ARRAY: 'ARRAY',
       STRING: 'STRING',
       NUMBER: 'NUMBER',
+      INTEGER: 'INTEGER',
     },
     Modality: {
       AUDIO: 'AUDIO',
