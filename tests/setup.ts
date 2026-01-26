@@ -1,3 +1,4 @@
+
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
@@ -76,21 +77,32 @@ Object.defineProperty(window, 'IntersectionObserver', { value: IntersectionObser
 vi.mock('@google/genai', () => {
   const mockGenerateContent = vi.fn().mockImplementation((params) => {
     const contents = params.contents;
-    const prompt = typeof contents === 'string' 
-      ? contents 
-      : JSON.stringify(contents);
+    let prompt = "";
+    
+    if (typeof contents === 'string') {
+      prompt = contents;
+    } else if (Array.isArray(contents)) {
+      prompt = JSON.stringify(contents);
+    } else if (contents && typeof contents === 'object') {
+       prompt = JSON.stringify(contents);
+    }
 
-    // Default to rank structure as it's the most common failure point
+    // Default response data (used for recommendation ranking)
     let data: any = [
       { index: 0, matchedTopics: ['AI'] },
       { index: 1, matchedTopics: ['Signal Processing'] }
     ];
 
+    // Broaden matching to be less brittle
+    const p = prompt.toLowerCase();
+    
     if (
-      prompt.includes('Define "') || 
-      prompt.includes('Analyze this scientific paper') || 
-      prompt.includes('academic metadata') ||
-      prompt.includes('Extract core academic metadata')
+      p.includes('define') || 
+      p.includes('summarize') || 
+      p.includes('metadata') ||
+      p.includes('abstract') ||
+      p.includes('synthesis') ||
+      p.includes('contribution')
     ) {
       data = { 
         term: 'Neural Networks', 
@@ -100,23 +112,31 @@ vi.mock('@google/genai', () => {
         researchContext: 'Fundamental to deep learning systems.',
         relatedTopics: ['Deep Learning', 'AI'],
         authors: ['Test Author'],
-        year: 2024, // Must be integer per schema
-        tags: ['AI', 'Machine Learning']
+        year: 2024,
+        tags: ['AI', 'Machine Learning'],
+        newTopics: ['Quantum AI']
       };
-    } else if (prompt.includes('trending papers') || prompt.includes('highly trending papers')) {
+    } else if (p.includes('trending') || p.includes('breakthroughs') || p.includes('scholar')) {
       data = { 
         results: [
           { title: 'Trending Paper 1', authors: ['Author A'], year: '2024', snippet: 'Insight', citationCount: 100 }
         ] 
       };
-    } else if (prompt.includes('Search Amazon') || prompt.includes('Search highest rated books')) {
+    } else if (p.includes('amazon') || p.includes('books') || p.includes('marketplace')) {
       data = { 
         books: [
           { title: 'Mock Book', author: 'Author B', price: '$50', rating: 4.5, amazonUrl: '#', description: 'Description' }
         ] 
       };
-    } else if (prompt.includes('Identify which of these tags represent') || prompt.includes('suggest a list of 5 granular technical tags')) {
+    } else if (p.includes('tag') || p.includes('trajectory') || p.includes('interest')) {
       data = { tags: ['AI', 'Neural Networks'], newTopics: ['Quantum AI'] };
+    } else if (p.includes('network') || p.includes('cluster') || p.includes('graph')) {
+      data = {
+        nodes: [{ id: '1', name: 'Author A', cluster: 'AI', level: 1 }],
+        clusters: [{ name: 'AI', color: '#ff0000' }]
+      };
+    } else if (p.includes('citation') || p.includes('reference')) {
+      data = { references: ['Paper A', 'Paper B'] };
     }
 
     const mockResponseJson = JSON.stringify(data);
@@ -126,7 +146,11 @@ vi.mock('@google/genai', () => {
       usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 20, totalTokenCount: 30 },
       candidates: [{ 
         content: { parts: [{ text: mockResponseJson }] },
-        groundingMetadata: { groundingChunks: [] }
+        groundingMetadata: { 
+          groundingChunks: [
+            { web: { uri: 'https://example.com', title: 'Grounding Source' } }
+          ] 
+        }
       }]
     });
   });
