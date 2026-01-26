@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -43,13 +42,9 @@ describe('Reviewer 2 Adversarial Audit', () => {
     const triggerButton = screen.getByText(/Trigger Adversarial Audit/i);
     fireEvent.click(triggerButton);
     
-    // Wait for the audit content to appear (mocked response in setup.ts includes 'abstract' or 'term' keyword which triggers mock JSON)
-    // NOTE: In setup.ts, the mock response returns a predefined term object if 'abstract' is in the prompt.
-    // The component renders text directly if it's a string, or formatted if it's the mock.
+    // Wait for the audit content to appear (mocked response in setup.ts)
     await waitFor(() => {
-      expect(screen.getByText(/Adversarial audit failed/i)).not.toBeInTheDocument();
-      // Since mock returns a JSON string, it will show up as raw text or structured text depending on how text is returned.
-      // Based on Reader.tsx, we display {auditResult}.
+      expect(screen.queryByText(/Adversarial audit failed/i)).not.toBeInTheDocument();
     });
   });
 });

@@ -1,4 +1,3 @@
-
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import Reader from '../components/Reader';
@@ -46,9 +45,9 @@ describe('What If Feature', () => {
     const analyzeButton = screen.getByText(/Analyze Scenario/i);
     fireEvent.click(analyzeButton);
     
-    // Wait for result (mock setup returns valid text based on 'paper' keywords)
+    // Wait for result
     await waitFor(() => {
-      expect(screen.getByText(/Hypothetical analysis failed/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Hypothetical analysis failed/i)).not.toBeInTheDocument();
     });
   });
 });
