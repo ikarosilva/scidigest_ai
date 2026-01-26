@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Academy from './components/Academy';
@@ -32,6 +33,7 @@ const App: React.FC = () => {
   const [showFeedback, setShowFeedback] = useState(false);
   const [showManualAdd, setShowManualAdd] = useState(false);
   const [activeReadingArticle, setActiveReadingArticle] = useState<Article | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const [selectedArticleIds, setSelectedArticleIds] = useState<string[]>([]);
   const [showSynthesisModal, setShowSynthesisModal] = useState(false);
@@ -103,7 +105,6 @@ const App: React.FC = () => {
   const handleSyncScholar = async () => {
     let scholarUrl = data.socialProfiles.googleScholar;
     
-    // 1. Requirement: Prompt for URL if missing
     if (!scholarUrl) {
       scholarUrl = prompt("Please enter your Google Scholar Profile URL (e.g. https://scholar.google.com/citations?user=...):") || "";
       if (!scholarUrl) return;
@@ -115,7 +116,6 @@ const App: React.FC = () => {
 
     setIsSyncingScholar(true);
     try {
-      // 2. Requirement: Use Google Scholar/Semantic Scholar to ingest all user articles
       const papers = await academicApiService.fetchAuthorPapers(scholarUrl);
       
       if (papers.length === 0) {
@@ -130,7 +130,6 @@ const App: React.FC = () => {
 
       for (const p of papers) {
         if (!existingTitles.has(p.title.toLowerCase())) {
-          // 3. Requirement: Automatically assign to topics
           const matchedTopics = interests.filter(topic => 
             p.title.toLowerCase().includes(topic.toLowerCase()) || 
             (p.snippet && p.snippet.toLowerCase().includes(topic.toLowerCase()))
@@ -164,17 +163,14 @@ const App: React.FC = () => {
         }
       }
 
-      // Refresh local state with final db state
       setData({ ...dbService.getData() });
 
-      // 3. Requirement: Provide status update message
       if (newCount > 0) {
         alert(`Scholar Sync Complete: Ingested ${newCount} new articles into your library and mapped them to your research topics.`);
       } else {
         alert("Your library is already in sync with your Google Scholar profile.");
       }
 
-      // Also refresh the author network if possible
       const network = await geminiService.discoverAuthorNetwork(data.socialProfiles);
       if (network && network.nodes && network.nodes.length > 0) {
         setAuthorNetworkData(network);
@@ -190,6 +186,7 @@ const App: React.FC = () => {
 
   const mainPadding = currentTab === 'reader' ? 'p-0' : 'p-8';
   const contentWidth = currentTab === 'reader' ? 'max-w-none' : 'max-w-6xl mx-auto pb-20';
+  const sidebarMargin = isSidebarCollapsed ? 'ml-20' : 'ml-64';
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 font-inter">
@@ -197,7 +194,9 @@ const App: React.FC = () => {
         currentTab={currentTab} 
         setTab={setCurrentTab} 
         onOpenFeedback={() => setShowFeedback(true)} 
-        syncStatus={syncStatus} 
+        syncStatus={syncStatus}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
       />
       
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
@@ -219,7 +218,7 @@ const App: React.FC = () => {
         />
       )}
       
-      <main className={`flex-1 ml-64 ${mainPadding} min-h-screen`}>
+      <main className={`flex-1 ${sidebarMargin} ${mainPadding} min-h-screen transition-all duration-300`}>
         <div className={`${contentWidth}`}>
           {currentTab === 'feed' && (
             <FeedMonitor 

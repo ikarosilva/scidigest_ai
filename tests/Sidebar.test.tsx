@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
@@ -6,6 +7,8 @@ import Sidebar from '../components/Sidebar';
 describe('Sidebar Component', () => {
   const mockSetTab = vi.fn();
   const mockOpenFeedback = vi.fn();
+  // Added mock for setIsCollapsed
+  const mockSetIsCollapsed = vi.fn();
 
   it('renders research group headers and main logo', () => {
     render(
@@ -14,6 +17,9 @@ describe('Sidebar Component', () => {
         setTab={mockSetTab} 
         onOpenFeedback={mockOpenFeedback} 
         syncStatus="synced" 
+        // Added missing props
+        isCollapsed={false}
+        setIsCollapsed={mockSetIsCollapsed}
       />
     );
     
@@ -32,6 +38,9 @@ describe('Sidebar Component', () => {
         setTab={mockSetTab} 
         onOpenFeedback={mockOpenFeedback} 
         syncStatus="synced" 
+        // Added missing props
+        isCollapsed={false}
+        setIsCollapsed={mockSetIsCollapsed}
       />
     );
     
@@ -46,6 +55,9 @@ describe('Sidebar Component', () => {
         setTab={mockSetTab} 
         onOpenFeedback={mockOpenFeedback} 
         syncStatus="synced" 
+        // Added missing props
+        isCollapsed={false}
+        setIsCollapsed={mockSetIsCollapsed}
       />
     );
     
@@ -61,6 +73,9 @@ describe('Sidebar Component', () => {
         setTab={mockSetTab} 
         onOpenFeedback={mockOpenFeedback} 
         syncStatus="synced" 
+        // Added missing props
+        isCollapsed={false}
+        setIsCollapsed={mockSetIsCollapsed}
       />
     );
     

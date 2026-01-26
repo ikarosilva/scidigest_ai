@@ -26,7 +26,24 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 }) => {
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState('');
+  // Fix: Move useRef declaration to the top of the component and avoid re-assignment
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const statusColors: Record<SyncStatus, string> = {
+    'disconnected': 'bg-slate-700',
+    'synced': 'bg-emerald-500',
+    'syncing': 'bg-indigo-500',
+    'error': 'bg-red-500',
+    'update-available': 'bg-amber-500'
+  };
+
+  const statusText: Record<SyncStatus, string> = {
+    'disconnected': 'Cloud Off',
+    'synced': 'Sync Active',
+    'syncing': 'Syncing...',
+    'error': 'Sync Error',
+    'update-available': 'Update Found'
+  };
 
   const handleUpdateBias = (bias: RecommendationBias) => {
     onUpdateAIConfig({ ...aiConfig, recommendationBias: bias });
@@ -146,10 +163,12 @@ const SettingsSection: React.FC<SettingsSectionProps> = ({
 
            <div className="bg-slate-950/50 rounded-2xl p-6 border border-slate-800/50 flex flex-col justify-center">
               <div className="flex items-center gap-4">
-                 <div className={`w-3 h-3 rounded-full ${syncStatus === 'synced' ? 'bg-emerald-500' : 'bg-slate-700'}`}></div>
+                 <div className={`w-3 h-3 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'animate-pulse' : ''}`}></div>
                  <div>
-                    <p className="text-xs font-bold text-slate-300">Status: {syncStatus.toUpperCase()}</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Direct connection to appDataFolder.</p>
+                    <p className="text-xs font-bold text-slate-300">Storage Status: {statusText[syncStatus]}</p>
+                    <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">
+                      {syncStatus === 'synced' ? 'Direct connection to appDataFolder' : 'No active cloud connection'}
+                    </p>
                  </div>
               </div>
            </div>

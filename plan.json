@@ -1,6 +1,6 @@
 {
   "project": "SciDigest AI",
-  "version": "1.5.5",
+  "version": "1.6.0",
   "meta": {
     "executive_summary": "SciDigest AI is a high-velocity environment for the ingestion, triage, and synthesis of scientific literature. It is designed to move researchers from 'Information Overload' to 'Methodological Mastery.'",
     "philosophy": "Local-first, adversarial intelligence, high-velocity ingestion. Single source of truth is plan.json.",
@@ -18,6 +18,35 @@
   },
   "modules": [
     {
+      "id": "ui_ux_layout",
+      "name": "Navigation & Layout",
+      "context": "Responsive Workspace Layout",
+      "triggers": [
+        {
+          "action": "Toggle Sidebar Collapse",
+          "functionality": "Allows users to manually collapse the main sidebar to a mini-view (icons only) or expand to full-view.",
+          "ui_location": "Sidebar -> Right Edge Toggle Tab"
+        },
+        {
+          "action": "Toggle Reader Insights Panel",
+          "functionality": "Allows collapsing the top-mounted research insights panel in the Reader.",
+          "ui_location": "Reader -> Top Bar Toggle"
+        },
+        {
+          "action": "Toggle Reader Notes Panel",
+          "functionality": "Allows collapsing the side-mounted notes panel (Left) in the Reader.",
+          "ui_location": "Reader -> Left Bar Toggle"
+        }
+      ]
+    },
+    {
+      "id": "pdf_viewer",
+      "name": "PDF Viewer",
+      "context": "Primary research analysis window",
+      "functionality": "The main viewport of the Reader. Displays PDF contents via sandboxed iframe with full scroll support. Positioned to the right of the Notes component.",
+      "ui_location": "Reader -> Main Viewport"
+    },
+    {
       "id": "reviewer_2",
       "name": "Reviewer 2 Protocol",
       "context": "Adversarial Methodology Audit",
@@ -26,12 +55,12 @@
         {
           "action": "Trigger Adversarial Audit",
           "service_method": "geminiService.runReviewer2Audit",
-          "ui_location": "Reader Sidebar -> Reviewer 2 Tab"
+          "ui_location": "Reader Top Bar -> Insights -> Reviewer 2 Tab"
         },
         {
-          "action": "Export to Notes",
-          "functionality": "Exports the critical report into a new Research Note linked to the article.",
-          "ui_location": "Reader Sidebar -> Reviewer 2 Tab (Post-result)"
+          "action": "Append to Notes",
+          "functionality": "Concatenates the critical report to the bottom of the current annotations and ensures the Notes panel is visible.",
+          "ui_location": "Reader Top Bar -> Insights -> Reviewer 2 (Post-result)"
         }
       ],
       "tests": "tests/Reviewer2.test.tsx"
@@ -45,12 +74,12 @@
         {
           "action": "Analyze Scenario",
           "service_method": "geminiService.askWhatIf",
-          "ui_location": "Reader Sidebar -> What If Tab"
+          "ui_location": "Reader Top Bar -> Insights -> What If Tab"
         },
         {
-          "action": "Export to Notes",
-          "functionality": "Exports the scenario implications into a new Research Note linked to the article.",
-          "ui_location": "Reader Sidebar -> What If Tab (Post-result)"
+          "action": "Append to Notes",
+          "functionality": "Concatenates the scenario implications to the bottom of the current annotations and ensures the Notes panel is visible.",
+          "ui_location": "Reader Top Bar -> Insights -> What If (Post-result)"
         }
       ],
       "tests": "tests/WhatIf.test.tsx"
@@ -97,6 +126,11 @@
           "action": "NotebookLM Export",
           "functionality": "Generates a specialized analysis bundle for Google NotebookLM ingestion.",
           "ui_location": "Library Section -> Floating Shelf Dock"
+        },
+        {
+          "action": "View Storage Status",
+          "functionality": "Displays real-time cloud sync and encryption status.",
+          "ui_location": "Settings Section -> Cloud Synchronization"
         }
       ],
       "tests": "tests/LibrarySection.test.tsx"
@@ -111,7 +145,7 @@
         {
           "action": "Discover Forward Citations",
           "service_method": "geminiService.discoverReferences",
-          "ui_location": "Reader Sidebar -> Rabbit Hole Tab"
+          "ui_location": "Reader Top Bar -> Insights -> Rabbit Hole Tab"
         }
       ],
       "tests": "tests/RabbitHole.test.tsx"
@@ -149,7 +183,7 @@
         {
           "action": "Generate 10-Question Quiz",
           "functionality": "Validates deep internalization of methodology.",
-          "ui_location": "Reader Sidebar -> Quiz Tab"
+          "ui_location": "Reader Top Bar -> Insights -> Quiz Tab"
         }
       ]
     },
