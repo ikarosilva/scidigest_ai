@@ -2,37 +2,33 @@
 
 You are acting as a world-class senior frontend engineer and research assistant developer. Adhere to these rules for every modification:
 
+## 🛡️ Quality & Verification (MANDATORY)
+- **Quality Manifest**: Before starting any task, read `quality.md` to understand the "Critical Zones".
+- **Diagnostic Triage**: If the user provides a log payload matching the signature in the "Blue Zone" of `quality.md`, strictly prioritize the **Mandatory AI Reaction Protocol** over feature requests. Identify the `APP_VERSION` and `ERROR` context immediately.
+- **Regression Check**: Ensure no existing feature is removed or broken.
+- **Test Alignment**: If a logical service (dbService, geminiService) is changed, update the corresponding `.test.ts` file immediately.
+
+## 🧹 Lean Code Protocol (Safety First)
+- **NO SILENT DELETION**: Never delete a file without asking for explicit permission from the user first.
+- **MANDATORY CHECKPOINT**: Before performing any structural pruning (logic removal or file deletion), instruct the user to create a checkpoint by using the **"Full JSON Backup"** feature in the Settings tab. 
+- **REVERSIBILITY**: Ensure that any pruning process is documented in the chat so changes can be manually reverted if the user changes their mind.
+- **Context Management**: Scan files for unused variables/imports before finishing to keep the AI's context window clean.
+
 ## 🛠 Tech Stack & Patterns
 - **React 19**: Use functional components and modern hooks.
-- **Tailwind CSS**: Use utility classes for all styling. Maintain the current "slate-950" dark theme with indigo/amber accents.
-- **TypeScript**: Maintain strict typing. Ensure all interfaces in `types.ts` are updated when state changes.
-- **Local-First**: Always prioritize `localStorage` via `dbService.ts` for data persistence.
-- **Gemini API**: Follow the specific `@google/genai` guidelines for SDK initialization and model naming.
+- **Tailwind CSS**: Maintain "slate-950" theme with indigo/amber accents.
+- **Local-First**: Prioritize `localStorage` via `dbService.ts`.
+- **Gemini API**: Follow `@google/genai` guidelines strictly. 
 
 ## 🎨 UI/UX Preferences
-- **Aesthetics**: Use glassmorphism, smooth transitions (Tailwind `animate-in`), and high-contrast typography for scientific readability.
-- **Responsiveness**: Ensure all views work on desktop and tablets.
+- **Aesthetics**: Glassmorphism, smooth transitions (Tailwind `animate-in`), high-contrast typography.
+- **Icons**: Use Emojis consistently.
 - **Feedback**: Provide loading states for all AI operations.
-- **Icons**: Use Emojis as icons consistently throughout the app.
 
 ## 🧠 Intelligence Guidelines
-- **Grounding**: Always extract and display URLs when using `googleSearch` tools.
-- **Telemetry**: Every new AI feature must report usage to `dbService.trackUsage`.
-- **Adversarial Thinking**: When adding features, consider the "Reviewer 2" persona—robustness and skepticism of data.
-- **Permission for Scope Expansion**: ALWAYS ask for explicit permission before implementing any features, logic, or UI elements that were not specifically requested in the prompt. Do not provide "extra" or "unrequested" features as a surprise.
-- **Preservation of Features**: NEVER remove existing features, buttons, components, or UI elements unless explicitly instructed to do so. If an update requires refactoring, ensure all previous functionality is preserved in the new implementation.
+- **Grounding**: Always display URLs when using `googleSearch`.
+- **Telemetry**: Report usage to `dbService.trackUsage`.
+- **Adversarial Thinking**: Consider the "Reviewer 2" persona for feature robustness.
 
-## 🛠 Error Handling & Communication
-- **Error Diagnosis**: When build or log errors are pasted into the chat, always provide a brief explanation of the root cause.
-- **Fix Explanation**: Briefly explain the logic used to resolve the error alongside the provided code updates.
-- **Test Robustness**: When writing tests for UI elements that share text (e.g., 'Insights' appearing as both a tab and a group label), use specific queries like `screen.getAllByText` or role-based queries to avoid "multiple elements found" errors.
-
-## 📝 Coding Style
-- Keep updates minimal and focused on the user request.
-- Do not remove existing comments unless they are obsolete.
-- Use descriptive variable names that reflect the scientific domain.
-- Ensure all new components are exported and integrated into `App.tsx` navigation.
-
-## 📦 Version Control & Releases
-- **Permission Required**: Always ask for explicit permission before increasing the `APP_VERSION` in `dbService.ts`. 
-- **User Editing**: Always allow the user to provide or edit the version number when a release bump is discussed.
+## 📦 Version Control
+- **Permission Required**: Ask before increasing `APP_VERSION` in `dbService.ts`.

@@ -6,11 +6,10 @@ const INTERESTS_KEY = 'scidigest_interests_v1';
 const FEEDS_KEY = 'scidigest_feeds_v1';
 const AI_CONFIG_KEY = 'scidigest_ai_config_v1';
 const SYNC_KEY_STORAGE = 'scidigest_sync_key';
-export const APP_VERSION = '1.5.1';
-export const RELEASE_DATE = 'May 26, 2024';
+export const APP_VERSION = '1.5.2';
+export const RELEASE_DATE = 'June 10, 2024';
 
-const MAX_LOG_ENTRIES = 50;
-const MAX_USAGE_ENTRIES = 200;
+const MAX_LOG_ENTRIES = 100;
 
 const DEFAULT_QUEUE_SHELF: Shelf = {
   id: 'default-queue',
@@ -37,7 +36,8 @@ const DEFAULT_AI_CONFIG: AIConfig = {
   recommendationBias: 'balanced',
   feedbackUrl: 'https://github.com/your-username/your-repo/issues/new',
   reviewer2Prompt: 'Review this paper as a journal Reviewer 2. Provide criticism on methods, weak or hidden assumptions, logical/mathematical/reasoning mistakes. Identify meaningless or over citations as well as incorrect interpretation of previous works. Point out any biases. If appropriate, be dismissive of results.',
-  monthlyTokenLimit: 1000000 // 1M tokens default
+  monthlyTokenLimit: 1000000,
+  debugMode: false
 };
 
 const DEFAULT_FEEDS: Feed[] = [
@@ -64,10 +64,12 @@ export const dbService = {
     const stored = localStorage.getItem(AI_CONFIG_KEY);
     const parsed = stored ? JSON.parse(stored) : DEFAULT_AI_CONFIG;
     if (!parsed.monthlyTokenLimit) parsed.monthlyTokenLimit = DEFAULT_AI_CONFIG.monthlyTokenLimit;
+    if (parsed.debugMode === undefined) parsed.debugMode = DEFAULT_AI_CONFIG.debugMode;
     return parsed;
   },
   saveAIConfig: (config: AIConfig) => {
     localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+    window.dispatchEvent(new CustomEvent('db-update'));
   },
   getData: (): AppState => {
     const data = localStorage.getItem(STORAGE_KEY);
@@ -88,10 +90,11 @@ export const dbService = {
     };
     const parsed = JSON.parse(data) as AppState;
     
+    // Automatic Log Reset & Version Sync
     if (parsed.version !== APP_VERSION) {
+      dbService.addLog('info', `Version updated from ${parsed.version} to ${APP_VERSION}. Purging diagnostic buffer.`);
       parsed.version = APP_VERSION;
-      // Version update purges diagnostic buffer as per test requirement
-      parsed.logs = [];
+      parsed.logs = []; 
     }
 
     if (!parsed.logs) parsed.logs = [];
@@ -123,29 +126,60 @@ export const dbService = {
   },
   trackUsage: (event: GeminiUsageEvent) => {
     const data = dbService.getData();
-    data.usageHistory = [event, ...(data.usageHistory || [])].slice(0, MAX_USAGE_ENTRIES);
+    data.usageHistory = [event, ...(data.usageHistory || [])].slice(0, 200);
     dbService.saveData(data);
   },
+  // Added getUsageStats to resolve error in components/TelemetrySection.tsx
   getUsageStats: () => {
     const data = dbService.getData();
     const history = data.usageHistory || [];
-    const totalTokens = history.reduce((acc, curr) => acc + curr.totalTokens, 0);
-    const avgLatency = history.length ? history.reduce((acc, curr) => acc + curr.latencyMs, 0) / history.length : 0;
-    
-    const byFeature: Record<string, number> = {};
-    history.forEach(h => {
-      byFeature[h.feature] = (byFeature[h.feature] || 0) + h.totalTokens;
+    const stats = {
+      totalTokens: 0,
+      avgLatency: 0,
+      byFeature: {} as Record<string, number>
+    };
+
+    if (history.length === 0) return stats;
+
+    let totalLatency = 0;
+    history.forEach(event => {
+      stats.totalTokens += event.totalTokens;
+      totalLatency += event.latencyMs;
+      stats.byFeature[event.feature] = (stats.byFeature[event.feature] || 0) + event.totalTokens;
     });
 
-    return { totalTokens, avgLatency, byFeature };
+    stats.avgLatency = totalLatency / history.length;
+    return stats;
   },
-  addLog: (type: 'error' | 'warning' | 'info', message: string) => {
+  // Added trackFeedbackSubmission to resolve error in components/FeedbackModal.tsx
+  trackFeedbackSubmission: () => {
+    const data = dbService.getData();
+    data.feedbackSubmissions.push(new Date().toISOString());
+    dbService.saveData(data);
+  },
+  // Added getMonthlyFeedbackCount to resolve error in components/FeedbackModal.tsx
+  getMonthlyFeedbackCount: (): number => {
+    const data = dbService.getData();
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return data.feedbackSubmissions.filter(ts => {
+      const d = new Date(ts);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    }).length;
+  },
+  addLog: (type: 'error' | 'warning' | 'info' | 'debug', message: string, context?: any) => {
+    const config = dbService.getAIConfig();
+    // System-wide debug filter
+    if (type === 'debug' && !config.debugMode) return;
+    
     const data = dbService.getData();
     const newEntry: LogEntry = {
       version: APP_VERSION,
       type,
       date: new Date().toISOString(),
-      message
+      message,
+      context
     };
     data.logs = [newEntry, ...(data.logs || [])].slice(0, MAX_LOG_ENTRIES);
     dbService.saveData(data);
@@ -172,17 +206,6 @@ export const dbService = {
   saveFeeds: (feeds: Feed[]) => {
     localStorage.setItem(FEEDS_KEY, JSON.stringify(feeds));
   },
-  trackFeedbackSubmission: () => {
-    const data = dbService.getData();
-    data.feedbackSubmissions.push(new Date().toISOString());
-    dbService.saveData(data);
-  },
-  getMonthlyFeedbackCount: (): number => {
-    const data = dbService.getData();
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
-    return (data.feedbackSubmissions || []).filter((ts: string) => new Date(ts) > thirtyDaysAgo).length;
-  },
   getInterests: (): string[] => {
     const stored = localStorage.getItem(INTERESTS_KEY);
     return stored ? JSON.parse(stored) : DEFAULT_INTERESTS;
@@ -193,12 +216,6 @@ export const dbService = {
   addArticle: (article: Article): AppState => {
     const data = dbService.getData();
     data.articles.unshift(article);
-    dbService.saveData(data);
-    return data;
-  },
-  addArticles: (articles: Article[]): AppState => {
-    const data = dbService.getData();
-    data.articles = [...articles, ...data.articles];
     dbService.saveData(data);
     return data;
   },

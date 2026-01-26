@@ -13,8 +13,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     {
       label: 'Discovery',
       items: [
-        { id: 'dashboard', label: 'Insights', icon: '📊' },
-        { id: 'sprint', label: 'Research Sprint', icon: '🏃' },
         { id: 'feed', label: 'AI Recommends', icon: '✨' },
         { id: 'tracker', label: 'Tracker', icon: '🕵️' },
         { id: 'trending', label: 'Trending', icon: '🔥' },
@@ -24,7 +22,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
       label: 'Workspace',
       items: [
         { id: 'reader', label: 'Reader', icon: '📖' },
-        { id: 'shelves', label: 'Shelves', icon: '📥' },
         { id: 'library', label: 'Library', icon: '📚' },
         { id: 'notes', label: 'Notes', icon: '✍️' },
       ]
@@ -39,17 +36,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
     {
       label: 'Configuration',
       items: [
-        { id: 'topics', label: 'Topics', icon: '🎯' },
-        { id: 'feeds', label: 'Feeds', icon: '📡' },
-        { id: 'telemetry', label: 'AI Usage', icon: '🤖' },
-        { id: 'portability', label: 'Data & Privacy', icon: '💾' },
+        { id: 'sources', label: 'Sources & Topics', icon: '📡' },
         { id: 'settings', label: 'Settings', icon: '⚙️' },
       ]
     },
     {
       label: 'Help',
       items: [
-        { id: 'guide', label: 'User Guide', icon: '📕' },
         { id: 'version', label: 'App Version', icon: '🏷️' },
         { id: 'logs', label: 'System Logs', icon: '📝' },
         { id: 'feedback', label: 'Submit Issues', icon: '🐞' },
@@ -122,14 +115,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentTab, setTab, onOpenFeedback, s
         <div className="bg-slate-950/50 backdrop-blur-md rounded-2xl p-3 space-y-2 border border-slate-800/50">
           <div className="flex items-center justify-between">
             <span className="text-[9px] text-slate-600 uppercase font-black tracking-widest">Storage Status</span>
-            <div className={`w-1.5 h-1.5 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'sync-orbit' : ''}`}></div>
+            <div className={`w-1.5 h-1.5 rounded-full ${statusColors[syncStatus]} ${syncStatus === 'syncing' ? 'animate-pulse' : ''}`}></div>
           </div>
           <div className="flex items-center gap-2">
-             <span className="text-lg">☁️</span>
-             <div>
-               <p className="text-[11px] font-bold text-slate-300">{statusText[syncStatus]}</p>
-               <p className="text-[9px] text-slate-600">Local-First Privacy</p>
-             </div>
+             <span className="text-[10px] text-slate-300 font-bold">{statusText[syncStatus]}</span>
           </div>
         </div>
       </div>

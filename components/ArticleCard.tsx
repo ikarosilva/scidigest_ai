@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Article, Sentiment, Note, Shelf } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -22,7 +21,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const shelves = dbService.getData().shelves;
   const interests = dbService.getInterests();
   
-  // Filter tags to find ones that match global interests
   const matchedInterests = (article.tags || []).filter(tag => 
     interests.some(interest => tag.toLowerCase() === interest.toLowerCase())
   );
@@ -41,7 +39,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Paper Title: ${article.title}. Summary: ${article.abstract}` }] }],
+        contents: [{ parts: [{ text: `Briefing for paper titled: ${article.title}. Context: ${article.abstract}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -55,21 +53,13 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        
-        // Decode base64 to Uint8Array
         const binaryString = atob(base64Audio);
         const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
         const dataInt16 = new Int16Array(bytes.buffer);
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) {
-          channelData[i] = dataInt16[i] / 32768.0;
-        }
-
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
@@ -82,21 +72,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     }
   };
 
-  const handleDeepResearch = () => {
-    const query = encodeURIComponent(`Find recent citations, related clinical trials, and critical reviews of the paper: "${article.title}" by ${article.authors.join(', ')}.`);
-    window.open(`https://www.perplexity.ai/search?q=${query}`, '_blank');
-  };
-
-  const toggleShelf = (shelfId: string) => {
-    const currentShelves = article.shelfIds || [];
-    const isCurrentlyIn = currentShelves.includes(shelfId);
-    let newShelfIds = isCurrentlyIn 
-      ? currentShelves.filter(id => id !== shelfId)
-      : [...currentShelves, shelfId];
-    
-    onUpdate(article.id, { shelfIds: newShelfIds });
-  };
-
   const sentimentColors: Record<Sentiment, string> = {
     Positive: 'bg-green-500/20 text-green-400 border-green-500/30',
     Neutral: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
@@ -104,7 +79,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
     Unknown: 'bg-slate-500/20 text-slate-400 border-slate-500/30'
   };
 
-  const activeShelvesCount = article.shelfIds?.length || 0;
+  const hasGrounding = article.groundingSources && article.groundingSources.length > 0;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm hover:shadow-indigo-500/5 transition-all group/card relative flex flex-col">
@@ -117,6 +92,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
             <span className="bg-slate-800 text-slate-400 text-[10px] font-bold px-2 py-1 rounded">
               {article.year}
             </span>
+            {hasGrounding && (
+              <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black px-2 py-1 rounded uppercase border border-emerald-500/30 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                Grounded
+              </span>
+            )}
           </div>
           <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase border ${sentimentColors[article.userReviews.sentiment]}`}>
             {article.userReviews.sentiment} Reception
@@ -143,30 +124,30 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
       </h3>
       <p className="text-xs text-slate-400 mb-3">{article.authors.join(', ')}</p>
 
-      {/* Matching Topics (Interests) */}
-      {matchedInterests.length > 0 && (
-        <div className="flex flex-wrap gap-1 mb-3">
-          {matchedInterests.map(topic => (
-            <span key={topic} className="text-[9px] font-black uppercase px-2 py-0.5 rounded border border-indigo-500/40 text-indigo-300 bg-indigo-500/10 flex items-center gap-1.5 shadow-lg shadow-indigo-500/5">
-              <span className="text-[10px]">🎯</span>
-              {topic}
-            </span>
-          ))}
+      {summary && (
+        <div className="bg-indigo-500/5 border border-indigo-500/10 p-3 rounded-lg mb-3 animate-in fade-in slide-in-from-top-1">
+           <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-line">{summary}</p>
         </div>
       )}
 
-      {/* Shelf Badges */}
-      {activeShelvesCount > 0 && (
+      {/* Grounding Source Preview */}
+      {hasGrounding && (
+        <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
+           {article.groundingSources!.slice(0, 2).map((s, i) => s.web && (
+             <a key={i} href={s.web.uri} target="_blank" rel="noreferrer" className="shrink-0 bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[9px] text-indigo-400 hover:border-indigo-500 transition-all flex items-center gap-1">
+                <span>🔗</span> {s.web.title?.substring(0, 15)}...
+             </a>
+           ))}
+        </div>
+      )}
+
+      {matchedInterests.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-3">
-           {article.shelfIds.map(sid => {
-             const s = shelves.find(sh => sh.id === sid);
-             return s ? (
-               <span key={sid} className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500 flex items-center gap-1.5 bg-slate-950/50">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }}></span>
-                  {s.name}
-               </span>
-             ) : null;
-           })}
+          {matchedInterests.map(topic => (
+            <span key={topic} className="text-[9px] font-black uppercase px-2 py-0.5 rounded border border-indigo-500/40 text-indigo-300 bg-indigo-500/10 flex items-center gap-1.5">
+              🎯 {topic}
+            </span>
+          ))}
         </div>
       )}
 
@@ -180,12 +161,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
              <span className="text-[10px] text-slate-500">citations</span>
           </div>
         </div>
-        <button 
-          onClick={handleDeepResearch}
-          className="text-[10px] text-emerald-400 hover:text-emerald-300 font-bold ml-auto flex items-center gap-1 bg-emerald-500/5 px-2 py-1 rounded-lg border border-emerald-500/10 transition-all"
-        >
-          <span>🌐</span> Deep Research
-        </button>
       </div>
 
       <div className="flex flex-col gap-2 mt-auto relative">
@@ -199,7 +174,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
           </button>
           <button 
             onClick={() => setShowShelfMenu(!showShelfMenu)}
-            className={`px-4 py-2 border rounded-lg transition-all ${activeShelvesCount > 0 ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
+            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-indigo-400"
             title="Manage Shelves"
           >
             📂
@@ -207,13 +182,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
           <button 
             onClick={handleListen}
             className={`px-4 py-2 border rounded-lg transition-all ${isPlaying ? 'bg-indigo-500 border-indigo-400 text-white animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-indigo-400'}`}
-            title="Listen to AI Briefing"
           >
             {isPlaying ? '🔊' : '🎧'}
           </button>
           <button 
             onClick={onRead}
-            className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800"
           >
             📖
           </button>
@@ -225,24 +199,20 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
             {shelves.map(shelf => (
               <button
                 key={shelf.id}
-                onClick={() => toggleShelf(shelf.id)}
-                className="w-full flex items-center justify-between p-2 hover:bg-slate-700 rounded-lg transition-colors group"
+                onClick={() => {
+                  const currentShelves = article.shelfIds || [];
+                  const isCurrentlyIn = currentShelves.includes(shelf.id);
+                  onUpdate(article.id, { shelfIds: isCurrentlyIn ? currentShelves.filter(id => id !== shelf.id) : [...currentShelves, shelf.id] });
+                }}
+                className="w-full flex items-center justify-between p-2 hover:bg-slate-700 rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-3">
                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: shelf.color }}></div>
                    <span className="text-xs text-slate-200">{shelf.name}</span>
                 </div>
-                {article.shelfIds?.includes(shelf.id) && (
-                  <span className="text-indigo-400 text-xs">✓</span>
-                )}
+                {article.shelfIds?.includes(shelf.id) && <span className="text-indigo-400 text-xs">✓</span>}
               </button>
             ))}
-            <button 
-              onClick={() => setShowShelfMenu(false)}
-              className="w-full text-[10px] text-slate-500 hover:text-white pt-2 transition-colors border-t border-slate-700 mt-1"
-            >
-              Done
-            </button>
           </div>
         )}
       </div>

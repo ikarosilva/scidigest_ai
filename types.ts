@@ -19,9 +19,10 @@ export type ReadingMode = 'default' | 'paper' | 'night';
 
 export interface LogEntry {
   version: string;
-  type: 'error' | 'warning' | 'info';
+  type: 'error' | 'warning' | 'info' | 'debug';
   date: string;
   message: string;
+  context?: any; // Rich diagnostic data
 }
 
 export interface GeminiUsageEvent {
@@ -41,6 +42,7 @@ export interface AIConfig {
   reviewer2Prompt: string;
   feedbackUrl: string;
   monthlyTokenLimit: number;
+  debugMode: boolean; // System-wide debug flag
 }
 
 export interface UserReviews {
@@ -87,7 +89,7 @@ export interface Article {
   title: string;
   authors: string[];
   abstract: string;
-  quickTake?: string; // New: 1-sentence summary
+  quickTake?: string; 
   date: string;
   year: string;
   source: FeedSourceType;

@@ -22,7 +22,7 @@ const MOCK_NEW_PAPERS = [
 
 const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, onRead, activeFeeds, aiConfig }) => {
   const [candidates, setCandidates] = useState<any[]>(MOCK_NEW_PAPERS);
-  const [ranking, setRanking] = useState<number[]>([]);
+  const [ranking, setRanking] = useState<{ index: number, matchedTopics: string[] }[]>([]);
   const [loading, setLoading] = useState(false);
   const [quickTakes, setQuickTakes] = useState<Record<string, string>>({});
   const [shelfMenuCandidateId, setShelfMenuCandidateId] = useState<string | null>(null);
@@ -31,11 +31,12 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
 
   const handleRank = async () => {
     setLoading(true);
-    const indices = await geminiService.recommendArticles(ratedArticles, books, candidates, aiConfig);
-    setRanking(indices);
+    const interests = dbService.getInterests();
+    const results = await geminiService.recommendArticles(ratedArticles, books, candidates, interests, aiConfig);
+    setRanking(results);
     
     // Background fetch QuickTakes for top 3
-    const topIndices = indices.slice(0, 3);
+    const topIndices = results.slice(0, 3).map(r => r.index);
     for (const idx of topIndices) {
       const c = candidates[idx];
       if (!quickTakes[c.id]) {
@@ -48,7 +49,7 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
   };
 
   const sortedCandidates = ranking.length > 0 
-    ? ranking.map(idx => candidates[idx]) 
+    ? ranking.map(r => ({ ...candidates[r.index], matchedTopics: r.matchedTopics })) 
     : candidates;
 
   const createArticleFromCandidate = (c: any, shelfIds: string[] = []): Article => ({
@@ -61,7 +62,7 @@ const FeedMonitor: React.FC<FeedMonitorProps> = ({ ratedArticles, books, onAdd, 
     year: c.year || '2025',
     source: (c.source as FeedSourceType) || FeedSourceType.MANUAL,
     rating: 5,
-    tags: ['Recommended'],
+    tags: ['Recommended', ...(c.matchedTopics || [])],
     isBookmarked: false,
     notes: '',
     noteIds: [] as string[],

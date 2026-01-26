@@ -22,10 +22,11 @@ describe('geminiService', () => {
       { id: '1', title: 'Paper 1', snippet: 'A' },
       { id: '2', title: 'Paper 2', snippet: 'B' }
     ];
-    // Added monthlyTokenLimit to AIConfig to satisfy type requirements
-    const aiConfig = { recommendationBias: 'balanced' as const, reviewer2Prompt: '', feedbackUrl: '', monthlyTokenLimit: 1000000 };
+    // Fix: Added missing debugMode to AIConfig to satisfy type requirements
+    const aiConfig = { recommendationBias: 'balanced' as const, reviewer2Prompt: '', feedbackUrl: '', monthlyTokenLimit: 1000000, debugMode: false };
     
-    const rankings = await geminiService.recommendArticles([], [], candidates, aiConfig);
+    // Fix: Added missing 4th argument (interests array) to match the signature of recommendArticles
+    const rankings = await geminiService.recommendArticles([], [], candidates, [], aiConfig);
     expect(Array.isArray(rankings)).toBe(true);
   });
 
