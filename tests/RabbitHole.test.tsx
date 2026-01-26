@@ -34,10 +34,13 @@ describe('Rabbit Hole Feature', () => {
       />
     );
     
-    const rabbitTab = screen.getByText('Rabbit Hole');
+    const rabbitTab = screen.getByRole('button', { name: /Rabbit Hole/i });
     fireEvent.click(rabbitTab);
     
-    const discoverButton = screen.getByText(/Discover Forward Citations/i);
+    // Content header for Rabbit Hole
+    expect(await screen.findByText(/Rabbit Hole Discovery/i)).toBeInTheDocument();
+    
+    const discoverButton = screen.getByRole('button', { name: /Discover Forward Citations/i });
     fireEvent.click(discoverButton);
     
     // Check if results appear (mocked in setup.ts)
@@ -60,11 +63,12 @@ describe('Rabbit Hole Feature', () => {
       />
     );
     
-    fireEvent.click(screen.getByText('Rabbit Hole'));
-    fireEvent.click(screen.getByText(/Discover Forward Citations/i));
+    fireEvent.click(screen.getByRole('button', { name: /Rabbit Hole/i }));
+    const discoverButton = await screen.findByRole('button', { name: /Discover Forward Citations/i });
+    fireEvent.click(discoverButton);
     
     await waitFor(() => {
-      const queueButton = screen.getByText('+ Queue');
+      const queueButton = screen.getByRole('button', { name: /\+ Ingest/i });
       fireEvent.click(queueButton);
     });
     

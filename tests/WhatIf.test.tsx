@@ -1,5 +1,7 @@
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
+import React from 'react';
 import Reader from '../components/Reader';
 import { FeedSourceType } from '../types';
 
@@ -31,21 +33,21 @@ describe('What If Feature', () => {
     );
     
     // Switch to What If tab
-    const whatIfTab = screen.getByText('What If');
+    const whatIfTab = screen.getByRole('button', { name: /What If/i });
     fireEvent.click(whatIfTab);
     
-    // Check initial state
-    expect(screen.getByText(/What If Assistant/i)).toBeInTheDocument();
+    // Check initial state within tab content
+    expect(await screen.findByText(/What If Assistant/i)).toBeInTheDocument();
     
     // Enter scenario
     const input = screen.getByPlaceholderText(/What if this was applied/i);
     fireEvent.change(input, { target: { value: 'What if we used a different dataset?' } });
     
     // Trigger analysis
-    const analyzeButton = screen.getByText(/Analyze Scenario/i);
+    const analyzeButton = screen.getByRole('button', { name: /Analyze Scenario/i });
     fireEvent.click(analyzeButton);
     
-    // Wait for result
+    // Wait for result (mocked in setup.ts)
     await waitFor(() => {
       expect(screen.queryByText(/Hypothetical analysis failed/i)).not.toBeInTheDocument();
     });
