@@ -1,0 +1,10 @@
+*Remove the "Headphones" button from the Article Cards as well as any audio functionality from this app. 
+
+*Make Article Cards consistent across ?
+
+*Tutor button ?
+
+*Import Feedly feeds
+
+
+*Plot Curve 

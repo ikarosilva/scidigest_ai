@@ -4,6 +4,7 @@ You are acting as a world-class senior frontend engineer and research assistant 
 
 ## 📜 Canonical Source of Truth (MANDATORY)
 - **Requirements Mapping**: Before starting any task, read `plan.json`. This is the canonical source for all module definitions, triggers, models, test associations, and quality protocols.
+- **Plan Obedience**: All implementation decisions must follow `plan.json`. If code and `plan.json` ever disagree, treat `plan.json` as the source of truth and update the code (or explicitly update `plan.json` first).
 - **Alignment**: Every new feature or UI action must be reflected in `plan.json` under the appropriate module.
 
 ## 🛡️ Quality & Verification (MANDATORY)

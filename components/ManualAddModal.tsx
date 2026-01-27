@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Article, FeedSourceType } from '../types';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
-import { academicApiService } from '../services/academicApiService';
 
 interface ManualAddModalProps {
   onClose: () => void;
@@ -13,7 +12,6 @@ interface ManualAddModalProps {
 }
 
 const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existingInterests, onUpdateInterests }) => {
-  const [mode, setMode] = useState<'form' | 'file' | 'url'>('form');
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -22,7 +20,6 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
     pdfUrl: '',
     year: new Date().getFullYear().toString()
   });
-  const [urlInput, setUrlInput] = useState('');
   const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
   const [newTopics, setNewTopics] = useState<string[]>([]);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -53,29 +50,68 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
         const base64 = result.split(',')[1];
         if (!base64) throw new Error("Failed to extract base64 data from file reader result.");
 
-        setProcessingStatus('Consulting Research Assistant (Gemini Pro)...');
-        const metadata = await geminiService.extractMetadataFromPDF(base64);
-        
-        if (metadata && metadata.title) {
-          const authors = Array.isArray(metadata.authors) ? metadata.authors.join(', ') : (metadata.authors || '');
+        // Always allow local PDF viewing, even if Gemini is unavailable.
+        const fallbackTitle = file.name.replace(/\.pdf$/i, '');
+        const dataUrl = result;
+
+        // If no Gemini API key is configured in the frontend, skip AI entirely.
+        const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
+        if (!apiKey) {
           setFormData({
-            title: metadata.title || '',
-            authors,
-            abstract: metadata.abstract || '',
-            year: String(metadata.year || formData.year),
-            pdfUrl: ''
+            title: fallbackTitle,
+            authors: '',
+            abstract: '',
+            year: formData.year,
+            pdfUrl: dataUrl
           });
-          await triggerAutoAnalysis(metadata.title, metadata.abstract || '');
-          setMode('form');
-        } else {
-          dbService.addLog('warning', `PDF extraction returned no title for file: ${file.name}`);
-          alert("Could not automatically extract paper details. Please verify the PDF is text-readable and try again, or fill manually.");
+          setProcessingStatus('PDF loaded. Configure Gemini to enable automatic metadata extraction (optional).');
+          return;
+        }
+
+        // Try Gemini-based metadata extraction as an enhancement only.
+        setProcessingStatus('Consulting Research Assistant (Gemini Pro)...');
+        try {
+          const metadata = await geminiService.extractMetadataFromPDF(base64);
+          
+          if (metadata && metadata.title) {
+            const authors = Array.isArray(metadata.authors) ? metadata.authors.join(', ') : (metadata.authors || '');
+            setFormData({
+              title: metadata.title || fallbackTitle,
+              authors,
+              abstract: metadata.abstract || '',
+              year: String(metadata.year || formData.year),
+              pdfUrl: dataUrl
+            });
+            await triggerAutoAnalysis(metadata.title, metadata.abstract || '');
+          } else {
+            dbService.addLog('warning', `PDF extraction returned no title for file: ${file.name}`);
+            setFormData({
+              title: fallbackTitle,
+              authors: '',
+              abstract: '',
+              year: formData.year,
+              pdfUrl: dataUrl
+            });
+            setProcessingStatus('AI enrichment unavailable. Using basic PDF import.');
+          }
+        } catch (aiErr: any) {
+          // Gemini failed for some other reason. Log but still allow viewing the PDF.
+          const errorMsg = aiErr?.message || String(aiErr);
+          dbService.addLog('error', `Local PDF AI Enrichment Error: ${errorMsg}`);
+          setFormData({
+            title: fallbackTitle,
+            authors: '',
+            abstract: '',
+            year: formData.year,
+            pdfUrl: dataUrl
+          });
+          setProcessingStatus('AI enrichment failed. PDF loaded with basic metadata.');
         }
       } catch (err: any) {
         const errorMsg = err?.message || String(err);
         console.error("PDF Processing Error:", err);
         dbService.addLog('error', `Local PDF Processing Error: ${errorMsg}`);
-        alert(`Internal error during PDF processing: ${errorMsg}`);
+        alert(`Internal error during PDF file reading: ${errorMsg}`);
       } finally {
         setLoading(false);
       }
@@ -91,51 +127,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
     reader.readAsDataURL(file);
   };
 
-  const handleUrlIngest = async () => {
-    const input = urlInput.trim();
-    if (!input) return;
-    
-    setLoading(true);
-    
-    try {
-      const identifier = academicApiService.extractIdentifier(input);
-      let details: Partial<Article> | null = null;
-
-      if (identifier.type === 'doi') {
-        setProcessingStatus('Connecting to Crossref API...');
-        details = await academicApiService.fetchFromCrossref(identifier.id);
-      } else if (identifier.type === 'arxiv') {
-        setProcessingStatus('Connecting to arXiv API...');
-        details = await academicApiService.fetchFromArxiv(identifier.id);
-      }
-
-      // If direct API lookup fails or no identifier was found, fallback to Gemini
-      if (!details) {
-        setProcessingStatus('Grounding URL against global repositories (Gemini)...');
-        details = await geminiService.fetchArticleDetails(input);
-      }
-
-      if (details && details.title) {
-        setFormData({
-          title: details.title,
-          authors: Array.isArray(details.authors) ? details.authors.join(', ') : (details.authors || ''),
-          abstract: details.abstract || '',
-          year: String(details.year || formData.year),
-          pdfUrl: details.pdfUrl || input
-        });
-        await triggerAutoAnalysis(details.title, details.abstract || '');
-        setMode('form');
-      } else {
-        alert("Could not retrieve metadata. Please verify the link or enter details manually.");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Ingestion failed. Proceeding to manual entry.");
-      setMode('form');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // URL/DOI/arXiv lookup has been removed; ingestion is now PDF-file only.
 
   const handleAdd = () => {
     if (!formData.title.trim()) return;
@@ -179,23 +171,11 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
       <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
         <header className="p-6 border-b border-slate-800 flex justify-between items-center">
           <div>
-            <h3 className="text-xl font-bold text-white">Ingest Scientific Paper</h3>
-            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1">Direct Ingestion Protocol</p>
+            <h3 className="text-xl font-bold text-white">Add Paper (PDF File)</h3>
+            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1">Local PDF Ingestion Only</p>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">✕</button>
         </header>
-
-        <div className="flex bg-slate-950 p-1 mx-6 mt-6 rounded-xl border border-slate-800">
-          {(['form', 'file', 'url'] as const).map(m => (
-            <button 
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 py-2 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${mode === m ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              {m === 'form' ? 'Manual' : m === 'file' ? 'PDF File' : 'Lookup'}
-            </button>
-          ))}
-        </div>
 
         <div className="p-6 space-y-6 flex-1 overflow-y-auto max-h-[60vh]">
           {loading ? (
@@ -205,41 +185,17 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
             </div>
           ) : (
             <>
-              {mode === 'url' && (
-                <div className="space-y-4">
-                  <p className="text-xs text-slate-500 leading-relaxed">Paste a DOI, arXiv link, or journal URL. The system will attempt a direct <strong>GET lookup</strong> for instant metadata.</p>
-                  <div className="flex gap-2">
-                    <input 
-                      type="url"
-                      placeholder="e.g., 10.1145/3313831 or https://arxiv.org/abs/..."
-                      value={urlInput}
-                      onChange={(e) => setUrlInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleUrlIngest()}
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-200 outline-none focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <button 
-                      onClick={handleUrlIngest}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-6 rounded-xl transition-all"
-                    >
-                      Lookup
-                    </button>
-                  </div>
-                </div>
-              )}
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-800 rounded-2xl p-10 text-center hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer transition-all"
+              >
+                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
+                <span className="text-3xl block mb-2">📄</span>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select Scientific PDF</p>
+                <p className="text-[10px] text-slate-600 mt-2">Maximum metadata recovery enabled (Pro Model)</p>
+              </div>
 
-              {mode === 'file' && (
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-800 rounded-2xl p-10 text-center hover:border-indigo-500/50 hover:bg-indigo-500/5 cursor-pointer transition-all"
-                >
-                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="application/pdf" className="hidden" />
-                  <span className="text-3xl block mb-2">📄</span>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Select Scientific PDF</p>
-                  <p className="text-[10px] text-slate-600 mt-2">Maximum metadata recovery enabled (Pro Model)</p>
-                </div>
-              )}
-
-              <div className={`space-y-4 ${mode !== 'form' ? 'opacity-40 grayscale pointer-events-none' : ''}`}>
+              <div className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="text-[9px] uppercase font-black text-slate-600 mb-1 block tracking-widest">Article Title</label>

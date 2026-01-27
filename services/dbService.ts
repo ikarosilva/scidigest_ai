@@ -301,6 +301,17 @@ export const dbService = {
     dbService.saveData(data);
     return data;
   },
+  deleteArticle: (id: string): AppState => {
+    const data = dbService.getData();
+    data.articles = data.articles.filter((a: Article) => a.id !== id);
+    // Unlink this article from any notes referencing it
+    data.notes = data.notes.map((n: Note) => ({
+      ...n,
+      articleIds: n.articleIds.filter((aid: string) => aid !== id)
+    }));
+    dbService.saveData(data);
+    return data;
+  },
   exportFullBackup: (): string => {
     const data = dbService.getData();
     const interests = dbService.getInterests();

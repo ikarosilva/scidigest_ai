@@ -197,12 +197,16 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         <div className="flex items-center gap-3">
           <button 
             onClick={() => setIsTopBarCollapsed(!isTopBarCollapsed)}
+            title={isTopBarCollapsed ? "Show Insights Panel" : "Hide Insights Panel"}
+            aria-label={isTopBarCollapsed ? "Show Insights Panel" : "Hide Insights Panel"}
             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${!isTopBarCollapsed ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}
           >
             Insights {isTopBarCollapsed ? '▼' : '▲'}
           </button>
           <button 
             onClick={() => setIsNotesCollapsed(!isNotesCollapsed)}
+            title={isNotesCollapsed ? "Show Notes Panel" : "Hide Notes Panel"}
+            aria-label={isNotesCollapsed ? "Show Notes Panel" : "Hide Notes Panel"}
             className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 ${!isNotesCollapsed ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}
           >
             Notes {isNotesCollapsed ? '▶' : '◀'}
@@ -338,11 +342,49 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         </div>
       )}
 
-      {/* 3. MAIN SPLIT AREA: NOTES (SIDEBAR) & PDF VIEWER (MAIN WINDOW) */}
+      {/* 3. MAIN SPLIT AREA: PDF VIEWER (LEFT) & NOTES (RIGHT SIDEBAR) */}
       <div className="flex-1 flex overflow-hidden">
-        {/* LEFT BAR: NOTES COMPONENT */}
+        {/* MAIN VIEW: PDF VIEWER (LEFT) */}
+        <main className="flex-1 bg-slate-900 relative flex flex-col overflow-y-auto custom-scrollbar" aria-label="PDF Viewer">
+          <div className="absolute top-2 right-4 z-10 px-2 py-1 bg-black/40 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
+            PDF Viewer Window
+          </div>
+          {article.pdfUrl ? (
+            // For local data URL PDFs, omit sandboxing so the browser's native PDF viewer can render correctly.
+            article.pdfUrl.startsWith('data:') ? (
+              <iframe
+                src={article.pdfUrl}
+                className="w-full min-h-full border-none bg-white"
+                title="PDF Viewer"
+              />
+            ) : (
+              <iframe 
+                src={article.pdfUrl} 
+                className="w-full min-h-full border-none bg-white"
+                title="PDF Viewer"
+                sandbox="allow-scripts allow-same-origin allow-popups"
+              />
+            )
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
+               <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center text-4xl shadow-inner grayscale opacity-30">
+                  📄
+               </div>
+               <div>
+                  <h3 className="text-xl font-bold text-slate-300">PDF Rendering Unavailable</h3>
+                  <p className="text-slate-500 mt-2 text-sm max-w-sm">The source for this paper does not allow direct embedding. Please use the 'Native View' button to open the document in a browser tab.</p>
+               </div>
+               <div className="flex gap-4">
+                  <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-slate-800 text-slate-300 px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all hover:text-white">Search Scholar</button>
+                  <button onClick={() => window.open(article.pdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
+               </div>
+            </div>
+          )}
+        </main>
+
+        {/* RIGHT BAR: NOTES COMPONENT */}
         {!isNotesCollapsed && (
-          <aside className="w-96 border-r border-slate-800/50 bg-black/10 flex flex-col animate-in slide-in-from-left duration-300">
+          <aside className="w-96 border-l border-slate-800/50 bg-black/10 flex flex-col animate-in slide-in-from-right duration-300">
             <header className="p-4 border-b border-slate-800/50 flex justify-between items-center bg-black/10">
                <div>
                  <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Annotations</h3>
@@ -365,35 +407,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             </div>
           </aside>
         )}
-
-        {/* MAIN VIEW: PDF VIEWER */}
-        <main className="flex-1 bg-slate-900 relative flex flex-col overflow-y-auto custom-scrollbar" aria-label="PDF Viewer">
-          <div className="absolute top-2 right-4 z-10 px-2 py-1 bg-black/40 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
-            PDF Viewer Window
-          </div>
-          {article.pdfUrl ? (
-            <iframe 
-              src={article.pdfUrl} 
-              className="w-full min-h-full border-none bg-white"
-              title="PDF Viewer"
-              sandbox="allow-scripts allow-same-origin allow-popups"
-            />
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
-               <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center text-4xl shadow-inner grayscale opacity-30">
-                  📄
-               </div>
-               <div>
-                  <h3 className="text-xl font-bold text-slate-300">PDF Rendering Unavailable</h3>
-                  <p className="text-slate-500 mt-2 text-sm max-w-sm">The source for this paper does not allow direct embedding. Please use the 'Native View' button to open the document in a browser tab.</p>
-               </div>
-               <div className="flex gap-4">
-                  <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-slate-800 text-slate-300 px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all hover:text-white">Search Scholar</button>
-                  <button onClick={() => window.open(article.pdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
-               </div>
-            </div>
-          )}
-        </main>
       </div>
 
       {/* 4. FOOTER STATUS BAR */}

@@ -34,8 +34,8 @@
         },
         {
           "action": "Toggle Reader Notes Panel",
-          "functionality": "Allows collapsing the side-mounted notes panel (Left) in the Reader.",
-          "ui_location": "Reader -> Left Bar Toggle"
+          "functionality": "Allows collapsing the side-mounted notes panel (Right) in the Reader.",
+          "ui_location": "Reader -> Right Bar Toggle"
         }
       ]
     },
@@ -43,7 +43,7 @@
       "id": "pdf_viewer",
       "name": "PDF Viewer",
       "context": "Primary research analysis window",
-      "functionality": "The main viewport of the Reader. Displays PDF contents via sandboxed iframe with full scroll support. Positioned to the right of the Notes component.",
+      "functionality": "The main viewport of the Reader. Displays PDF contents via iframe with full scroll support. Positioned to the left of the Notes component.",
       "ui_location": "Reader -> Main Viewport"
     },
     {
@@ -126,6 +126,11 @@
           "action": "NotebookLM Export",
           "functionality": "Generates a specialized analysis bundle for Google NotebookLM ingestion.",
           "ui_location": "Library Section -> Floating Shelf Dock"
+        },
+        {
+          "action": "Delete Paper",
+          "functionality": "Removes a paper from the local Scientific Library after explicit user confirmation. This operation is local-only and does not affect any external services.",
+          "ui_location": "Library Section -> Article Card -> More/Delete"
         },
         {
           "action": "View Storage Status",
@@ -232,17 +237,13 @@
     {
       "id": "metadata_ingestion",
       "name": "Metadata Ingestion",
-      "context": "Structured lookup via DOI/arXiv/PDF",
+      "context": "Local PDF ingestion and optional AI metadata enrichment",
       "triggers": [
         {
-          "action": "DOI/arXiv Lookup",
-          "service_method": "academicApiService.fetchFromCrossref/Arxiv",
-          "ui_location": "Manual Add Modal -> Lookup Tab"
-        },
-        {
-          "action": "PDF Extraction",
-          "service_method": "geminiService.extractMetadataFromPDF",
-          "ui_location": "Manual Add Modal -> PDF File Tab"
+          "action": "PDF File Ingestion",
+          "service_method": "geminiService.extractMetadataFromPDF (optional)",
+          "functionality": "User selects a local PDF file which is immediately ingested into the Library and rendered in the Reader via a data URL. If Gemini is configured, extractMetadataFromPDF is used to enrich title/authors/abstract; if not, the PDF remains fully viewable with basic filename-derived metadata.",
+          "ui_location": "Library Section -> Add Paper (PDF File Only)"
         }
       ]
     }
