@@ -68,6 +68,13 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
 
         // Store large binary in IndexedDB (local-first, avoids localStorage quota issues on tablets).
         await pdfStorageService.putPdf({ id: pdfStorageId, blob, name: file.name });
+        dbService.addLog('info', 'Local PDF stored for manual add', {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          pdfStorageId,
+          userAgent: window.navigator.userAgent
+        });
         setPdfStorageId(pdfStorageId);
 
         // If no Gemini API key is configured in the frontend, skip AI entirely.

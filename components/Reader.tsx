@@ -88,6 +88,11 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
         const blob = await pdfStorageService.getPdfBlob(article.pdfStorageId);
         if (cancelled) return;
         if (!blob) {
+          dbService.addLog('warning', 'PDF blob not found for storage id', {
+            articleId: article.id,
+            pdfStorageId: article.pdfStorageId,
+            userAgent: window.navigator.userAgent
+          });
           setResolvedPdfUrl(null);
           return;
         }
@@ -448,19 +453,36 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
               />
             )
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
-               <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center text-4xl shadow-inner grayscale opacity-30">
-                  📄
-               </div>
-               <div>
-                  <h3 className="text-xl font-bold text-slate-300">PDF Rendering Unavailable</h3>
-                  <p className="text-slate-500 mt-2 text-sm max-w-sm">The source for this paper does not allow direct embedding. Please use the 'Native View' button to open the document in a browser tab.</p>
-               </div>
-               <div className="flex gap-4">
-                  <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-slate-800 text-slate-300 px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all hover:text-white">Search Scholar</button>
-                  <button onClick={() => window.open(effectivePdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
-               </div>
-            </div>
+            <>
+              {(() => {
+                // Log once when we fall back to the \"PDF Rendering Unavailable\" state for easier debugging on mobile.
+                try {
+                  dbService.addLog('warning', 'PDF Rendering Unavailable in Reader', {
+                    articleId: article.id,
+                    title: article.title,
+                    hasPdfUrl: !!article.pdfUrl,
+                    hasPdfStorageId: !!article.pdfStorageId,
+                    userAgent: window.navigator.userAgent
+                  });
+                } catch {
+                  // logging should never break UI
+                }
+                return null;
+              })()}
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-12 space-y-6">
+                 <div className="w-24 h-24 bg-slate-950 border border-slate-800 rounded-full flex items-center justify-center text-4xl shadow-inner grayscale opacity-30">
+                    📄
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-bold text-slate-300">PDF Rendering Unavailable</h3>
+                    <p className="text-slate-500 mt-2 text-sm max-w-sm">The source for this paper does not allow direct embedding. Please use the 'Native View' button to open the document in a browser tab.</p>
+                 </div>
+                 <div className="flex gap-4">
+                    <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-slate-800 text-slate-300 px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all hover:text-white">Search Scholar</button>
+                    <button onClick={() => window.open(article.pdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
+                 </div>
+              </div>
+            </>
           )}
         </main>
 

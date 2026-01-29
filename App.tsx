@@ -76,7 +76,8 @@ const App: React.FC = () => {
               ...existing,
               id: guideId,
               pdfStorageId: 'builtin-userguide-v1',
-              pdfUrl: undefined,
+              // Always keep a direct URL so PDFs render even if IndexedDB or blob URLs misbehave on some mobile browsers.
+              pdfUrl: '/UsergGuide.pdf',
               title: existing.title || 'SciDigest AI — User Guide',
               isBookmarked: existing.isBookmarked ?? true,
               shelfIds: existing.shelfIds?.length ? existing.shelfIds : ['default-queue']
@@ -91,6 +92,7 @@ const App: React.FC = () => {
               source: FeedSourceType.MANUAL,
               rating: 0,
               pdfStorageId: 'builtin-userguide-v1',
+              pdfUrl: '/UsergGuide.pdf',
               tags: ['User Guide', 'Onboarding'],
               isBookmarked: true,
               notes: '',
