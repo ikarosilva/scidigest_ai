@@ -309,6 +309,7 @@ const App: React.FC = () => {
 
           {currentTab === 'tracker' && (
             <Tracker 
+              activeRssFeeds={feeds.filter(f => f.active)}
               onAdd={(a) => setData(dbService.addArticle(a))} 
               onRead={handleOpenReader} 
             />

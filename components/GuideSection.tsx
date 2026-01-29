@@ -11,7 +11,7 @@ In an era where thousands of papers are published daily, the bottleneck in scien
 ## 🚀 1. Intelligent Discovery (Beyond RSS)
 Traditional feeds are noisy. SciDigest uses a **Human-in-the-Loop** approach to discovery:
 - **AI Recommends**: Learns from your 1-10 library ratings to prioritize new pre-prints and articles.
-- **Sonar Tracker**: Actively sweeps the live web for forward-citations and author bibliography updates, catching breakthroughs months before they hit mainstream aggregators.
+- **Feeds**: Actively sweeps the live web for forward-citations and author bibliography updates, catching breakthroughs months before they hit mainstream aggregators.
 - **Global Trends**: Connects you to high-velocity research and technical literature currently gaining traction in the global community.
 
 ## 📖 2. The Deep Reading Environment
@@ -75,7 +75,7 @@ const GuideSection: React.FC = () => {
           <p>Traditional feeds are noisy. SciDigest uses a <strong>Human-in-the-Loop</strong> approach to discovery:</p>
           <ul>
             <li><strong>AI Recommends</strong>: Learns from your 1-10 library ratings to prioritize new pre-prints and articles.</li>
-            <li><strong>Sonar Tracker</strong>: Actively sweeps the live web for forward-citations and author updates.</li>
+            <li><strong>Feeds</strong>: Actively sweeps the live web for forward-citations and author updates.</li>
             <li><strong>Global Trends</strong>: Connects you to technical literature currently gaining traction in the global community.</li>
           </ul>
 

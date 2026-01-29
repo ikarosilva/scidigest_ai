@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { Feed } from '../types';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
+import { FEED_CATALOG, EXTERNAL_CATALOG_LINKS } from '../services/feedCatalog';
 
 interface FeedsSectionProps {
   feeds: Feed[];
@@ -14,6 +14,8 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [discoveredFeeds, setDiscoveredFeeds] = useState<any[]>([]);
+  const [catalogModalOpen, setCatalogModalOpen] = useState(false);
+  const [selectedCatalogUrls, setSelectedCatalogUrls] = useState<Set<string>>(new Set());
 
   const handleAddFeed = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +72,36 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
     onUpdateFeeds(feeds.filter(f => f.id !== id));
   };
 
+  const existingUrls = new Set(feeds.map(f => f.url.toLowerCase()));
+
+  const toggleCatalogSelection = (url: string) => {
+    setSelectedCatalogUrls(prev => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  };
+
+  const handleAddSelectedFromCatalog = () => {
+    const toAdd: Feed[] = [];
+    FEED_CATALOG.forEach(cat => {
+      cat.feeds.forEach(f => {
+        if (selectedCatalogUrls.has(f.url) && !existingUrls.has(f.url.toLowerCase())) {
+          toAdd.push({
+            id: Math.random().toString(36).substr(2, 9),
+            name: f.name,
+            url: f.url,
+            active: true,
+          });
+        }
+      });
+    });
+    if (toAdd.length > 0) onUpdateFeeds([...feeds, ...toAdd]);
+    setSelectedCatalogUrls(new Set());
+    setCatalogModalOpen(false);
+  };
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -81,7 +113,13 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
             Configure the scientific sources monitored by the AI discovery engine.
           </p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap gap-3 w-full md:w-auto">
+          <button
+            onClick={() => setCatalogModalOpen(true)}
+            className="flex-1 md:flex-none px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 border bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+          >
+            📋 Add from catalog
+          </button>
           <button 
             onClick={handleDiscover}
             disabled={isDiscovering}
@@ -97,11 +135,78 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
                 Exploring...
               </>
             ) : (
-              <>🔍 Explore Catalogs</>
+              <>🔍 Discover with AI</>
             )}
           </button>
         </div>
       </header>
+
+      {/* Add from catalog modal */}
+      {catalogModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-2xl max-h-[85vh] rounded-[2rem] shadow-2xl flex flex-col overflow-hidden">
+            <header className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="text-xl font-bold text-white">Add feeds from catalog</h3>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black mt-1">Curated science & tech RSS</p>
+              </div>
+              <button onClick={() => { setCatalogModalOpen(false); setSelectedCatalogUrls(new Set()); }} className="text-slate-500 hover:text-white transition-colors">✕</button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+              {FEED_CATALOG.map(cat => (
+                <div key={cat.category}>
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-3">{cat.category}</h4>
+                  <ul className="space-y-2">
+                    {cat.feeds.map(f => {
+                      const alreadyAdded = existingUrls.has(f.url.toLowerCase());
+                      return (
+                        <li key={f.url} className="flex items-center gap-3 py-1.5">
+                          <input
+                            type="checkbox"
+                            id={`cat-${f.url}`}
+                            checked={selectedCatalogUrls.has(f.url)}
+                            onChange={() => toggleCatalogSelection(f.url)}
+                            disabled={alreadyAdded}
+                            className="rounded border-slate-600 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
+                          />
+                          <label htmlFor={`cat-${f.url}`} className={`flex-1 text-sm ${alreadyAdded ? 'text-slate-500' : 'text-slate-200'} cursor-pointer`}>
+                            {f.name}
+                            {alreadyAdded && <span className="ml-2 text-[10px] text-slate-600">(already added)</span>}
+                          </label>
+                          <span className="text-[10px] font-mono text-slate-600 truncate max-w-[180px]" title={f.url}>{f.url}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <footer className="p-6 border-t border-slate-800 bg-slate-950 flex flex-col gap-4 shrink-0">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAddSelectedFromCatalog}
+                  disabled={selectedCatalogUrls.size === 0}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all"
+                >
+                  Add selected to Monitoring Feeds ({selectedCatalogUrls.size})
+                </button>
+                <button onClick={() => { setCatalogModalOpen(false); setSelectedCatalogUrls(new Set()); }} className="px-4 py-3 rounded-xl bg-slate-800 text-slate-400 font-bold hover:text-white transition-colors">Cancel</button>
+              </div>
+              <p className="text-[10px] text-slate-500">Find more feeds:</p>
+              <div className="flex flex-wrap gap-2">
+                {EXTERNAL_CATALOG_LINKS.map(link => (
+                  <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="text-indigo-400 hover:text-indigo-300 text-xs font-bold underline">
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                Found a feed there? Copy its RSS/Atom URL, close this modal, then paste the <strong className="text-slate-300">name</strong> and <strong className="text-slate-300">URL</strong> into <strong className="text-indigo-400">Add Custom RSS/JSON Feed</strong> below on this page and click Add New Source.
+              </p>
+            </footer>
+          </div>
+        </div>
+      )}
 
       {/* Discovery Results Section */}
       {discoveredFeeds.length > 0 && (
@@ -199,18 +304,29 @@ const FeedsSection: React.FC<FeedsSectionProps> = ({ feeds, onUpdateFeeds }) => 
                   No feed sources are currently configured. SciDigest works best when connected to major journals, preprint servers, and technical blogs.
                 </p>
               </div>
-              <button 
-                onClick={handleDiscover}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl shadow-xl transition-all flex items-center gap-2"
-              >
-                <span>✨</span> Discover Scientific Catalogs
-              </button>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <button 
+                  onClick={() => setCatalogModalOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl shadow-xl transition-all flex items-center gap-2"
+                >
+                  <span>📋</span> Add from catalog
+                </button>
+                <button 
+                  onClick={handleDiscover}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-black text-xs uppercase tracking-widest px-8 py-3 rounded-2xl border border-slate-700 transition-all flex items-center gap-2"
+                >
+                  <span>🔍</span> Discover with AI
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        <div className="pt-6 border-t border-slate-800">
-          <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-4">Add Custom RSS/JSON Feed</h4>
+        <div className="pt-6 border-t border-slate-800" id="add-custom-feed">
+          <h4 className="text-[10px] uppercase font-bold text-slate-500 tracking-widest mb-1">Add Custom RSS/JSON Feed</h4>
+          <p className="text-xs text-slate-500 mb-4">
+            Paste any RSS/Atom URL from Feedspot, Awesome RSS Feeds, or elsewhere. Enter a name and the feed URL, then click Add New Source.
+          </p>
           <form onSubmit={handleAddFeed} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <input 
               type="text" 

@@ -24,7 +24,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Discovery',
       items: [
         { id: 'feed', label: 'AI Recommends', icon: '✨' },
-        { id: 'tracker', label: 'Tracker', icon: '🕵️' },
+        { id: 'tracker', label: 'Feeds', icon: '🕵️' },
         { id: 'trending', label: 'Trending', icon: '🔥' },
       ]
     },

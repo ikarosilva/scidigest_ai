@@ -1,15 +1,15 @@
-
-import React, { useState, useEffect } from 'react';
-import { Article, FeedSourceType } from '../types';
+import React, { useState } from 'react';
+import { Article, FeedSourceType, Feed } from '../types';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
 
 interface TrackerProps {
+  activeRssFeeds: Feed[];
   onAdd: (article: Article) => void;
   onRead: (article: Article) => void;
 }
 
-const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
+const Tracker: React.FC<TrackerProps> = ({ activeRssFeeds, onAdd, onRead }) => {
   const [radarHits, setRadarHits] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [newAuthor, setNewAuthor] = useState('');
@@ -68,7 +68,7 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
     rating: 5,
     tags: ['Radar Hit', hit.reason.includes('author') ? 'Author Tracking' : 'Citation Tracking'],
     isBookmarked: false,
-    notes: `Tracker Hit: ${hit.reason}`,
+    notes: `Feeds Hit: ${hit.reason}`,
     noteIds: [],
     userReadTime: 0,
     pdfUrl: hit.url,
@@ -86,9 +86,9 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
       <header className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-            <span>🕵️</span> Research Tracker
+            <span>🕵️</span> Feeds
           </h2>
-          <p className="text-slate-400 mt-1">Live Sonar for citations and academic updates.</p>
+          <p className="text-slate-400 mt-1">Tracks your RSS feeds, followed authors (Scholar API), and paper citations (Scholar API).</p>
         </div>
         <div className="flex gap-4">
            <button 
@@ -113,11 +113,30 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
       </header>
 
       {showConfig && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in slide-in-from-top-4 duration-300">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-top-4 duration-300">
+          <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
+             <h3 className="text-lg font-bold text-amber-400 mb-4 flex items-center gap-2">
+               <span>📡</span> RSS Feeds You&apos;re Monitoring
+             </h3>
+             <p className="text-[10px] text-slate-500 mb-4 uppercase tracking-widest font-black">From Sources &amp; Topics → Monitoring Feeds</p>
+             <div className="space-y-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-2">
+               {activeRssFeeds.length === 0 ? (
+                 <p className="text-[10px] text-slate-600 italic">No active RSS feeds. Add feeds in Sources &amp; Topics → Monitoring Feeds.</p>
+               ) : (
+                 activeRssFeeds.map(f => (
+                   <div key={f.id} className="p-3 rounded-xl bg-slate-950/50 border border-slate-800">
+                     <p className="text-[10px] font-bold text-slate-200 truncate">{f.name}</p>
+                     <p className="text-[9px] font-mono text-slate-600 truncate" title={f.url}>{f.url}</p>
+                   </div>
+                 ))
+               )}
+             </div>
+          </div>
           <div className="bg-slate-900 border border-slate-800 rounded-[2rem] p-8 shadow-xl">
              <h3 className="text-lg font-bold text-indigo-400 mb-4 flex items-center gap-2">
                <span>👥</span> Tracked Authors
              </h3>
+             <p className="text-[10px] text-slate-500 mb-4 uppercase tracking-widest font-black">Scholar API: new publications by these authors</p>
              <form onSubmit={handleAddAuthor} className="flex gap-2 mb-6">
                 <input 
                   type="text" 
@@ -143,7 +162,7 @@ const Tracker: React.FC<TrackerProps> = ({ onAdd, onRead }) => {
              <h3 className="text-lg font-bold text-emerald-400 mb-4 flex items-center gap-2">
                <span>📄</span> Followed Literature
              </h3>
-             <p className="text-[10px] text-slate-500 mb-4 uppercase tracking-widest font-black">Sonar tracks new citations for these papers</p>
+             <p className="text-[10px] text-slate-500 mb-4 uppercase tracking-widest font-black">Scholar API: new citations for these papers</p>
              <div className="max-height-[300px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                 {libraryArticles.map(a => (
                   <button 

@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Article, Sentiment, Note, Shelf } from '../types';
 import { dbService } from '../services/dbService';
-import { GoogleGenAI, Modality } from "@google/genai";
 
 interface ArticleCardProps {
   article: Article;
@@ -13,7 +12,6 @@ interface ArticleCardProps {
 }
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, onNavigateToNote, onRead }) => {
-  const [isPlaying, setIsPlaying] = useState(false);
   const [showShelfMenu, setShowShelfMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -23,46 +21,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
   const matchedInterests = (article.tags || []).filter(tag => 
     interests.some(interest => tag.toLowerCase() === interest.toLowerCase())
   );
-
-  const handleListen = async () => {
-    if (isPlaying) return;
-    setIsPlaying(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Briefing for paper titled: ${article.title}. Context: ${article.abstract}` }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
-          },
-        },
-      });
-
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const binaryString = atob(base64Audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        const dataInt16 = new Int16Array(bytes.buffer);
-        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-        const source = audioContext.createBufferSource();
-        source.buffer = buffer;
-        source.connect(audioContext.destination);
-        source.onended = () => setIsPlaying(false);
-        source.start();
-      }
-    } catch (error) {
-      console.error("TTS Error:", error);
-      setIsPlaying(false);
-    }
-  };
 
   const sentimentColors: Record<Sentiment, string> = {
     Positive: 'bg-green-500/20 text-green-400 border-green-500/30',
@@ -166,12 +124,6 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
             title="Manage Shelves"
           >
             Manage Shelves 📂
-          </button>
-          <button 
-            onClick={handleListen}
-            className={`px-4 py-2 border rounded-lg transition-all ${isPlaying ? 'bg-indigo-500 border-indigo-400 text-white animate-pulse' : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-indigo-400'}`}
-          >
-            {isPlaying ? '🔊' : '🎧'}
           </button>
           <button 
             onClick={onRead}

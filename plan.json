@@ -96,16 +96,18 @@
       "tests": "tests/WhatIf.test.tsx"
     },
     {
-      "id": "research_tracker",
-      "name": "Sonar Tracker",
-      "context": "Live Sonar for Citations and Bibliography Updates",
+      "id": "research_feeds",
+      "name": "Feeds",
+      "context": "Unified tracking: RSS feeds, authors (Scholar API), and paper citations (Scholar API)",
+      "functionality": "Feeds tracks three sources: (1) Any RSS feeds selected in Sources & Topics → Monitoring Feeds; (2) Authors added in Manage Targets, queried via Scholar-style search (Semantic Scholar / Gemini grounding) for new publications; (3) Papers from the library marked for citation tracking, queried via Scholar-style search for new forward-citations. Manage Targets shows RSS feeds you are monitoring, tracked authors, and followed literature. Pinging Network runs a live sweep for author and citation updates.",
       "model": "gemini-3-flash-preview",
       "grounding": "googleSearch",
       "triggers": [
         {
           "action": "Pinging Network",
+          "functionality": "Sweeps for new publications by tracked authors and new citations for followed papers using Scholar-style search (Gemini grounding). RSS feeds are configured in Sources & Topics and listed in Feeds for visibility.",
           "service_method": "geminiService.getRadarUpdates",
-          "ui_location": "Tracker Tab -> Top Header"
+          "ui_location": "Feeds Tab -> Top Header"
         }
       ],
       "tests": "tests/Tracker.test.tsx"
@@ -127,6 +129,7 @@
       "id": "library_management",
       "name": "Scientific Library",
       "context": "Organized Ingestion and Sovereignty",
+      "functionality": "Article cards provide shelf management and Open Reader only. No audio, TTS, or headphones/listen action.",
       "triggers": [
         {
           "action": "Sync Scholar",
@@ -165,6 +168,31 @@
         }
       ],
       "tests": "tests/RabbitHole.test.tsx"
+    },
+    {
+      "id": "feed_sources",
+      "name": "Feed Sources",
+      "context": "RSS / feed configuration for AI discovery (Sources & Topics → Monitoring Feeds)",
+      "functionality": "Users configure which RSS feeds are monitored for the AI Recommends tab. Curated catalog, AI discovery, and manual add by URL are available.",
+      "triggers": [
+        {
+          "action": "Add from catalog",
+          "functionality": "Opens a modal with a categorized checklist of curated RSS feeds (science, tech, ML). User selects feeds and adds them to Monitoring Feeds. Links to Feedspot and Awesome RSS Feeds (GitHub) for finding more. Modal copy explains: if user finds a feed there, copy its RSS/Atom URL, close the modal, then use Add Custom RSS/JSON Feed (same page) to paste name and URL and add it.",
+          "ui_location": "Sources & Topics → Monitoring Feeds → Add from catalog"
+        },
+        {
+          "action": "Discover with AI",
+          "functionality": "Uses Gemini to discover scientific RSS feeds based on the user's research topics (interests). Results appear as cards with + Add to Feeds.",
+          "service_method": "geminiService.discoverScientificFeeds",
+          "ui_location": "Sources & Topics → Monitoring Feeds → Discover with AI"
+        },
+        {
+          "action": "Add Custom RSS/JSON Feed",
+          "functionality": "User pastes any RSS/Atom URL (e.g. from Feedspot or Awesome RSS Feeds). Enter feed name and URL, then click Add New Source. Use this to add feeds found in external catalogs.",
+          "ui_location": "Sources & Topics → Monitoring Feeds → Add Custom RSS/JSON Feed (below Active Sources)"
+        }
+      ],
+      "ui_location": "Sidebar → Sources & Topics → Monitoring Feeds tab"
     },
     {
       "id": "ai_discovery",

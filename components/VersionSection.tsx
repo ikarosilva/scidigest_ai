@@ -19,9 +19,9 @@ const VersionSection: React.FC = () => {
       description: "Visualizes research proficiency using a Dunning-Kruger confidence map. Progress is tracked through AI-generated conceptual quizzes that validate deep internalization of technical domains, gamifying the transition from surface-level awareness to research mastery."
     },
     {
-      title: "🕵️ Sonar Tracker",
+      title: "🕵️ Feeds",
       tagline: "Live Academic Web Sweep",
-      description: "Bypasses the latency of traditional RSS feeds. Sonar actively monitors specific academic trajectories for new forward-citations and author publications, keeping you ahead of the curve on critical research pivots before they hit the mainstream feeds."
+      description: "Bypasses the latency of traditional RSS. Feeds actively monitors specific academic trajectories for new forward-citations and author publications, keeping you ahead of the curve on critical research pivots before they hit the mainstream."
     },
     {
       title: "🔐 Sovereignty Architecture",
