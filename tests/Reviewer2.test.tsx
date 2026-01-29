@@ -32,6 +32,9 @@ describe('Reviewer 2 Adversarial Audit', () => {
       />
     );
     
+    // Expand Insights panel (default is collapsed)
+    const showInsights = screen.getByRole('button', { name: /Show Insights Panel/i });
+    fireEvent.click(showInsights);
     // Switch to Reviewer 2 tab
     const reviewerTab = screen.getByRole('button', { name: /Reviewer 2/i });
     fireEvent.click(reviewerTab);

@@ -32,6 +32,8 @@ describe('What If Feature', () => {
       />
     );
     
+    // Expand Insights panel (default is collapsed)
+    fireEvent.click(screen.getByRole('button', { name: /Show Insights Panel/i }));
     // Switch to What If tab
     const whatIfTab = screen.getByRole('button', { name: /What If/i });
     fireEvent.click(whatIfTab);

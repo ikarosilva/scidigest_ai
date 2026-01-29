@@ -29,13 +29,17 @@
         },
         {
           "action": "Toggle Reader Insights Panel",
-          "functionality": "Allows collapsing the top-mounted research insights panel in the Reader.",
+          "functionality": "Allows collapsing the top-mounted research insights panel in the Reader. Default: collapsed.",
           "ui_location": "Reader -> Top Bar Toggle"
         },
         {
           "action": "Toggle Reader Notes Panel",
-          "functionality": "Allows collapsing the side-mounted notes panel (Right) in the Reader.",
+          "functionality": "Allows collapsing the side-mounted notes panel (Right) in the Reader. Default: collapsed.",
           "ui_location": "Reader -> Right Bar Toggle"
+        },
+        {
+          "action": "Toggle Session Timer",
+          "functionality": "Shows or hides the Reader session timer. Default: hidden."
         }
       ]
     },
@@ -43,7 +47,14 @@
       "id": "pdf_viewer",
       "name": "PDF Viewer",
       "context": "Primary research analysis window",
-      "functionality": "The main viewport of the Reader. Displays PDF contents via iframe with full scroll support. Must support local-first PDFs uploaded by the user (including large files on mobile/tablet) by rendering from a persistent local storage source (e.g. IndexedDB blob -> object URL) with safe fallback for non-embeddable remote sources.",
+      "functionality": "The main viewport of the Reader. Displays PDF contents via iframe with full scroll support. Must support local-first PDFs uploaded by the user (including large files on mobile/tablet) by rendering from a persistent local storage source (e.g. IndexedDB blob -> object URL) with safe fallback for non-embeddable remote sources. No Metadata Context block in the notes panel.",
+      "triggers": [
+        {
+          "action": "Maximize / Restore PDF Viewer",
+          "functionality": "When maximized, the PDF viewer occupies the entire viewport (including over the left main navigation bar). Restore returns to the normal split layout.",
+          "ui_location": "Reader -> Header -> Maximize PDF / Restore"
+        }
+      ],
       "ui_location": "Reader -> Main Viewport"
     },
     {

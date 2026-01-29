@@ -58,12 +58,14 @@ describe('Reader Component', () => {
       />
     );
     
-    // Switch to Quiz Tab in Top Bar
+    // Expand Insights panel (default is collapsed)
+    fireEvent.click(screen.getByRole('button', { name: /Show Insights Panel/i }));
     const quizTab = screen.getByRole('button', { name: /Quiz/i });
     fireEvent.click(quizTab);
     expect(screen.getByText(/Generate 10-Question Quiz/i)).toBeInTheDocument();
     
-    // Verify Notes (Annotations) are visible in the Left Sidebar
+    // Expand Notes panel (default is collapsed) and verify
+    fireEvent.click(screen.getByRole('button', { name: /Show Notes Panel/i }));
     expect(screen.getByText(/Annotations/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Start typing scientific insights/i)).toBeInTheDocument();
   });
@@ -81,13 +83,14 @@ describe('Reader Component', () => {
         onAddReadTime={mockOnAddReadTime}
       />
     );
-    
+    // Timer is hidden by default
+    expect(screen.queryByText(/Session/i)).not.toBeInTheDocument();
+    const showTimerButton = screen.getByTitle('Show Timer');
+    fireEvent.click(showTimerButton);
+    expect(screen.getByText(/Session/i)).toBeInTheDocument();
     const hideTimerButton = screen.getByTitle('Hide Timer');
     fireEvent.click(hideTimerButton);
     expect(screen.queryByText(/Session/i)).not.toBeInTheDocument();
-    
-    const showTimerButton = screen.getByTitle('Show Timer');
-    expect(showTimerButton).toBeInTheDocument();
   });
 
   it('toggles reading mode styling', () => {

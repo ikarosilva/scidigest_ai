@@ -34,6 +34,8 @@ describe('Rabbit Hole Feature', () => {
       />
     );
     
+    // Expand Insights panel (default is collapsed)
+    fireEvent.click(screen.getByRole('button', { name: /Show Insights Panel/i }));
     const rabbitTab = screen.getByRole('button', { name: /Rabbit Hole/i });
     fireEvent.click(rabbitTab);
     
@@ -63,6 +65,7 @@ describe('Rabbit Hole Feature', () => {
       />
     );
     
+    fireEvent.click(screen.getByRole('button', { name: /Show Insights Panel/i }));
     fireEvent.click(screen.getByRole('button', { name: /Rabbit Hole/i }));
     const discoverButton = await screen.findByRole('button', { name: /Discover Forward Citations/i });
     fireEvent.click(discoverButton);

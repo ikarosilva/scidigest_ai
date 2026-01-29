@@ -21,14 +21,15 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
-  const [showTimer, setShowTimer] = useState(true);
+  const [showTimer, setShowTimer] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'reviewer2' | 'whatif' | 'rabbitHole' | 'quiz'>('reviewer2');
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
   const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
   
-  // Layout Collapsible states
-  const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(false);
-  const [isNotesCollapsed, setIsNotesCollapsed] = useState(false);
+  // Layout Collapsible states (default: collapsed for more reading space)
+  const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(true);
+  const [isNotesCollapsed, setIsNotesCollapsed] = useState(true);
+  const [isPdfMaximized, setIsPdfMaximized] = useState(false);
   
   // AI Feature results
   const [auditResult, setAuditResult] = useState<string | null>(null);
@@ -272,6 +273,14 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
             ))}
           </div>
           <button
+            onClick={() => setIsPdfMaximized(!isPdfMaximized)}
+            title={isPdfMaximized ? 'Restore PDF window' : 'Maximize PDF (full screen over app)'}
+            aria-label={isPdfMaximized ? 'Restore PDF window' : 'Maximize PDF'}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isPdfMaximized ? 'bg-amber-600 hover:bg-amber-700 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-200'}`}
+          >
+            {isPdfMaximized ? 'Restore' : 'Maximize PDF'}
+          </button>
+          <button
             onClick={() =>
               window.open(
                 effectivePdfUrl || `https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`,
@@ -284,6 +293,28 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           </button>
         </div>
       </header>
+
+      {/* Full-screen PDF overlay when maximized (covers entire app including sidebar) */}
+      {isPdfMaximized && effectivePdfUrl && (
+        <div className="fixed inset-0 z-[200] flex flex-col bg-slate-950" aria-label="Maximized PDF Viewer">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-black/40 shrink-0">
+            <span className="text-xs font-bold text-slate-300 truncate max-w-md">"{article.title}"</span>
+            <button
+              onClick={() => setIsPdfMaximized(false)}
+              className="bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg"
+            >
+              Restore
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 w-full">
+            {(effectivePdfUrl.startsWith('data:') || effectivePdfUrl.startsWith('blob:')) ? (
+              <iframe src={effectivePdfUrl} className="w-full h-full border-none bg-white" title="PDF Viewer (maximized)" />
+            ) : (
+              <iframe src={effectivePdfUrl} className="w-full h-full border-none bg-white" title="PDF Viewer (maximized)" sandbox="allow-scripts allow-same-origin allow-popups" />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 2. TOP BAR: INTEGRATED INSIGHTS */}
       {!isTopBarCollapsed && (
@@ -451,10 +482,6 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                  className="flex-1 bg-transparent text-sm leading-relaxed outline-none resize-none custom-scrollbar font-serif" 
                />
                <div ref={notesEndRef} />
-               <div className="pt-4 border-t border-slate-800/50 shrink-0">
-                  <p className="text-[9px] text-slate-600 uppercase font-black mb-2 tracking-widest">Metadata Context</p>
-                  <p className="text-[10px] text-slate-500 leading-relaxed italic line-clamp-3">"{article.abstract.substring(0, 150)}..."</p>
-               </div>
             </div>
           </aside>
         )}
