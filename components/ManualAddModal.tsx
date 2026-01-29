@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Article, FeedSourceType } from '../types';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
+import { pdfStorageService } from '../services/pdfStorageService';
 
 interface ManualAddModalProps {
   onClose: () => void;
@@ -13,6 +14,7 @@ interface ManualAddModalProps {
 
 const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existingInterests, onUpdateInterests }) => {
   const [loading, setLoading] = useState(false);
+  const [pdfStorageId, setPdfStorageId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     authors: '',
@@ -25,6 +27,18 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
   const [processingStatus, setProcessingStatus] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+    // Chunked conversion to avoid call-stack / memory spikes on mobile.
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000; // 32KB
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  };
 
   const triggerAutoAnalysis = async (title: string, abstract: string) => {
     if (!title || !abstract) return;
@@ -44,15 +58,17 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const result = event.target?.result as string;
-        if (!result) throw new Error("File reader returned null result.");
-        
-        const base64 = result.split(',')[1];
-        if (!base64) throw new Error("Failed to extract base64 data from file reader result.");
+        const arrayBuffer = event.target?.result as ArrayBuffer | null;
+        if (!arrayBuffer) throw new Error("File reader returned null result.");
 
         // Always allow local PDF viewing, even if Gemini is unavailable.
         const fallbackTitle = file.name.replace(/\.pdf$/i, '');
-        const dataUrl = result;
+        const pdfStorageId = `pdf-${Math.random().toString(36).slice(2, 11)}`;
+        const blob = new Blob([arrayBuffer], { type: file.type || 'application/pdf' });
+
+        // Store large binary in IndexedDB (local-first, avoids localStorage quota issues on tablets).
+        await pdfStorageService.putPdf({ id: pdfStorageId, blob, name: file.name });
+        setPdfStorageId(pdfStorageId);
 
         // If no Gemini API key is configured in the frontend, skip AI entirely.
         const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY as string | undefined;
@@ -62,7 +78,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
             authors: '',
             abstract: '',
             year: formData.year,
-            pdfUrl: dataUrl
+            pdfUrl: '',
           });
           setProcessingStatus('PDF loaded. Configure Gemini to enable automatic metadata extraction (optional).');
           return;
@@ -71,6 +87,8 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
         // Try Gemini-based metadata extraction as an enhancement only.
         setProcessingStatus('Consulting Research Assistant (Gemini Pro)...');
         try {
+          // Gemini expects base64. Convert efficiently without going through a giant `data:` URL.
+          const base64 = arrayBufferToBase64(arrayBuffer);
           const metadata = await geminiService.extractMetadataFromPDF(base64);
           
           if (metadata && metadata.title) {
@@ -80,7 +98,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
               authors,
               abstract: metadata.abstract || '',
               year: String(metadata.year || formData.year),
-              pdfUrl: dataUrl
+              pdfUrl: '',
             });
             await triggerAutoAnalysis(metadata.title, metadata.abstract || '');
           } else {
@@ -90,7 +108,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
               authors: '',
               abstract: '',
               year: formData.year,
-              pdfUrl: dataUrl
+              pdfUrl: '',
             });
             setProcessingStatus('AI enrichment unavailable. Using basic PDF import.');
           }
@@ -103,7 +121,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
             authors: '',
             abstract: '',
             year: formData.year,
-            pdfUrl: dataUrl
+            pdfUrl: '',
           });
           setProcessingStatus('AI enrichment failed. PDF loaded with basic metadata.');
         }
@@ -124,7 +142,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
       setLoading(false);
     };
 
-    reader.readAsDataURL(file);
+    reader.readAsArrayBuffer(file);
   };
 
   // URL/DOI/arXiv lookup has been removed; ingestion is now PDF-file only.
@@ -142,6 +160,7 @@ const ManualAddModal: React.FC<ManualAddModalProps> = ({ onClose, onAdd, existin
       source: FeedSourceType.MANUAL,
       rating: 0,
       pdfUrl: formData.pdfUrl || undefined,
+      pdfStorageId: pdfStorageId || undefined,
       tags: suggestedTags.length > 0 ? suggestedTags : ['Manual Ingestion'],
       isBookmarked: false,
       notes: '',

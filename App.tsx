@@ -22,6 +22,7 @@ import { cloudSyncService } from './services/cloudSyncService';
 import { geminiService } from './services/geminiService';
 import { academicApiService } from './services/academicApiService';
 import { Article, Book, Note, SyncStatus, Feed, AIConfig, AppState, SocialProfiles, FeedSourceType } from './types';
+import { pdfStorageService } from './services/pdfStorageService';
 
 const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState('feed');
@@ -43,6 +44,81 @@ const App: React.FC = () => {
   // Lifted Network State
   const [authorNetworkData, setAuthorNetworkData] = useState<any>(null);
   const [isSyncingScholar, setIsSyncingScholar] = useState(false);
+
+  useEffect(() => {
+    // One-time bootstrap: add built-in PDF user guide for first-time users (and Reader smoke test).
+    // Guard against React StrictMode double-invocation in dev.
+    let cancelled = false;
+    const bootstrapKey = 'scidigest_bootstrap_userguide';
+    const guideAssetVersion = 'v2'; // bump when public/UsergGuide.pdf changes
+
+    (async () => {
+      try {
+        const bootstrappedVersion = localStorage.getItem(bootstrapKey);
+        const existingData = dbService.getData();
+        const existing = existingData.articles.find(a => a.id === 'user-guide' || a.pdfStorageId === 'builtin-userguide-v1');
+        // If we already bootstrapped the current guide version, nothing to do.
+        if (bootstrappedVersion === guideAssetVersion && existing) return;
+
+        const res = await fetch('/UsergGuide.pdf');
+        if (!res.ok) throw new Error(`Failed to fetch UsergGuide.pdf: HTTP ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+
+        // Always overwrite the stored blob for the current version.
+        await pdfStorageService.putPdf({ id: 'builtin-userguide-v1', blob, name: 'UsergGuide.pdf' });
+        if (cancelled) return;
+
+        // Ensure a Library entry exists; if it already exists, update it in-place.
+        const guideId = existing?.id || 'user-guide';
+        const guideArticle: Article = existing
+          ? {
+              ...existing,
+              id: guideId,
+              pdfStorageId: 'builtin-userguide-v1',
+              pdfUrl: undefined,
+              title: existing.title || 'SciDigest AI — User Guide',
+              isBookmarked: existing.isBookmarked ?? true,
+              shelfIds: existing.shelfIds?.length ? existing.shelfIds : ['default-queue']
+            }
+          : {
+              id: guideId,
+              title: 'SciDigest AI — User Guide',
+              authors: ['SciDigest AI'],
+              abstract: 'A built-in quickstart PDF. Use this to validate that the Reader can render uploaded PDFs.',
+              date: new Date().toISOString(),
+              year: new Date().getFullYear().toString(),
+              source: FeedSourceType.MANUAL,
+              rating: 0,
+              pdfStorageId: 'builtin-userguide-v1',
+              tags: ['User Guide', 'Onboarding'],
+              isBookmarked: true,
+              notes: '',
+              noteIds: [],
+              userReadTime: 0,
+              shelfIds: ['default-queue'],
+              userReviews: {
+                sentiment: 'Unknown',
+                summary: 'Built-in onboarding guide.',
+                citationCount: 0
+              }
+            };
+
+        const next = existing
+          ? dbService.updateArticle(guideId, guideArticle)
+          : dbService.addArticle(guideArticle);
+        setData({ ...next });
+        localStorage.setItem(bootstrapKey, guideAssetVersion);
+      } catch (e: any) {
+        // Never block app load on onboarding asset.
+        dbService.addLog('warning', `User guide bootstrap skipped: ${e?.message || String(e)}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleUpdate = () => {

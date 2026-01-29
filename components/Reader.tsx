@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Article, Note, ReadingMode, FeedSourceType } from '../types';
 import { geminiService } from '../services/geminiService';
 import { dbService } from '../services/dbService';
+import { pdfStorageService } from '../services/pdfStorageService';
 
 interface ReaderProps {
   article: Article | null;
@@ -23,6 +24,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
   const [showTimer, setShowTimer] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'reviewer2' | 'whatif' | 'rabbitHole' | 'quiz'>('reviewer2');
   const [readingMode, setReadingMode] = useState<ReadingMode>('default');
+  const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
   
   // Layout Collapsible states
   const [isTopBarCollapsed, setIsTopBarCollapsed] = useState(false);
@@ -44,6 +46,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     if (article) {
       setSessionSeconds(0);
       setIsTimerPaused(false);
+      setResolvedPdfUrl(null);
       
       const existingNote = notes.find(n => n.articleIds.includes(article.id));
       if (existingNote) {
@@ -64,6 +67,42 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
     }
     return () => { if (timerRef.current) window.clearInterval(timerRef.current); };
   }, [article?.id, isTimerPaused]);
+
+  // Resolve PDF URL for large local PDFs stored in IndexedDB.
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrlToRevoke: string | null = null;
+
+    (async () => {
+      if (!article) return;
+      if (article.pdfUrl) {
+        setResolvedPdfUrl(article.pdfUrl);
+        return;
+      }
+      if (!article.pdfStorageId) {
+        setResolvedPdfUrl(null);
+        return;
+      }
+      try {
+        const blob = await pdfStorageService.getPdfBlob(article.pdfStorageId);
+        if (cancelled) return;
+        if (!blob) {
+          setResolvedPdfUrl(null);
+          return;
+        }
+        objectUrlToRevoke = URL.createObjectURL(blob);
+        setResolvedPdfUrl(objectUrlToRevoke);
+      } catch (err: any) {
+        dbService.addLog('error', `PDF restore failed for ${article.pdfStorageId}: ${err?.message || String(err)}`);
+        setResolvedPdfUrl(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
+    };
+  }, [article?.id, article?.pdfUrl, article?.pdfStorageId]);
 
   // Sync Markdown with parent when it changes
   useEffect(() => {
@@ -176,6 +215,8 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
 
   if (!article) return null;
 
+  const effectivePdfUrl = resolvedPdfUrl || undefined;
+
   return (
     <div title={article.title} className={`h-screen flex flex-col overflow-hidden transition-colors duration-500 ${
       readingMode === 'night' ? 'bg-[#1a1110] text-slate-300' : 
@@ -230,7 +271,17 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
               </button>
             ))}
           </div>
-          <button onClick={() => window.open(article.pdfUrl || `https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-lg">Native View</button>
+          <button
+            onClick={() =>
+              window.open(
+                effectivePdfUrl || `https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`,
+                '_blank'
+              )
+            }
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg transition-all shadow-lg"
+          >
+            Native View
+          </button>
         </div>
       </header>
 
@@ -349,17 +400,17 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
           <div className="absolute top-2 right-4 z-10 px-2 py-1 bg-black/40 rounded text-[9px] font-black text-slate-500 uppercase tracking-widest">
             PDF Viewer Window
           </div>
-          {article.pdfUrl ? (
-            // For local data URL PDFs, omit sandboxing so the browser's native PDF viewer can render correctly.
-            article.pdfUrl.startsWith('data:') ? (
+          {effectivePdfUrl ? (
+            // For local PDFs (data/blob URLs), omit sandboxing so the browser's native PDF viewer can render correctly.
+            (effectivePdfUrl.startsWith('data:') || effectivePdfUrl.startsWith('blob:')) ? (
               <iframe
-                src={article.pdfUrl}
+                src={effectivePdfUrl}
                 className="w-full min-h-full border-none bg-white"
                 title="PDF Viewer"
               />
             ) : (
               <iframe 
-                src={article.pdfUrl} 
+                src={effectivePdfUrl} 
                 className="w-full min-h-full border-none bg-white"
                 title="PDF Viewer"
                 sandbox="allow-scripts allow-same-origin allow-popups"
@@ -376,7 +427,7 @@ const Reader: React.FC<ReaderProps> = ({ article, notes, onNavigateToLibrary, on
                </div>
                <div className="flex gap-4">
                   <button onClick={() => window.open(`https://scholar.google.com/scholar?q=${encodeURIComponent(article.title)}`, '_blank')} className="bg-slate-800 text-slate-300 px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all hover:text-white">Search Scholar</button>
-                  <button onClick={() => window.open(article.pdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
+                  <button onClick={() => window.open(effectivePdfUrl || '#', '_blank')} className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl text-xs font-bold uppercase transition-all shadow-lg">Open Source Link</button>
                </div>
             </div>
           )}

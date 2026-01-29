@@ -95,6 +95,11 @@ export interface Article {
   source: FeedSourceType;
   rating: number;
   pdfUrl?: string;
+  /**
+   * Local-first PDF storage key for large files.
+   * Used when storing base64 `data:` URLs in localStorage would exceed quota (common on mobile/tablet).
+   */
+  pdfStorageId?: string;
   sourceCode?: string;
   dataLocation?: string;
   userReviews: UserReviews;

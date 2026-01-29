@@ -43,7 +43,7 @@
       "id": "pdf_viewer",
       "name": "PDF Viewer",
       "context": "Primary research analysis window",
-      "functionality": "The main viewport of the Reader. Displays PDF contents via iframe with full scroll support. Positioned to the left of the Notes component.",
+      "functionality": "The main viewport of the Reader. Displays PDF contents via iframe with full scroll support. Must support local-first PDFs uploaded by the user (including large files on mobile/tablet) by rendering from a persistent local storage source (e.g. IndexedDB blob -> object URL) with safe fallback for non-embeddable remote sources.",
       "ui_location": "Reader -> Main Viewport"
     },
     {
@@ -242,7 +242,7 @@
         {
           "action": "PDF File Ingestion",
           "service_method": "geminiService.extractMetadataFromPDF (optional)",
-          "functionality": "User selects a local PDF file which is immediately ingested into the Library and rendered in the Reader via a data URL. If Gemini is configured, extractMetadataFromPDF is used to enrich title/authors/abstract; if not, the PDF remains fully viewable with basic filename-derived metadata.",
+          "functionality": "User selects a local PDF file (any PDF) which is immediately ingested into the Library and must be readable in the Reader. Implementation must be robust on mobile/tablet: store the PDF locally in a persistent binary-friendly store (IndexedDB blob), persist a small reference key on the Article (e.g. pdfStorageId), and have the Reader resolve/render from that store. If Gemini is configured, extractMetadataFromPDF is used to enrich title/authors/abstract; if not, the PDF remains fully viewable with basic filename-derived metadata.",
           "ui_location": "Library Section -> Add Paper (PDF File Only)"
         }
       ]
