@@ -129,7 +129,7 @@
       "id": "library_management",
       "name": "Scientific Library",
       "context": "Organized Ingestion and Sovereignty",
-      "functionality": "Article cards provide shelf management and Open Reader only. No audio, TTS, or headphones/listen action.",
+      "functionality": "Article cards provide shelf management and Open Reader only. No audio, TTS, or headphones/listen action. Library can be viewed as cards or as a sortable list (table-like view) for spreadsheet-style triage.",
       "triggers": [
         {
           "action": "Sync Scholar",
@@ -145,6 +145,16 @@
           "action": "Delete Paper",
           "functionality": "Removes a paper from the local Scientific Library after explicit user confirmation. This operation is local-only and does not affect any external services.",
           "ui_location": "Library Section -> Article Card -> More/Delete"
+        },
+        {
+          "action": "Toggle Library View",
+          "functionality": "Switches between card/grid view and an Excel-style list view. List view displays model cards as rows with columns for Title, Author, Topic, Shelves (including Queue), Rating, and Publication Date.",
+          "ui_location": "Library Section -> View Toggle (Cards/List)"
+        },
+        {
+          "action": "Sort Library",
+          "functionality": "Allows sorting library items by Date Added (original insertion order), Rating, Topic (first tag), Queue membership (in default queue), Author name, and Publication Date.",
+          "ui_location": "Library Section -> View Toolbar -> Sort By"
         },
         {
           "action": "View Storage Status",

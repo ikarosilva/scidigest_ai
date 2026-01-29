@@ -39,8 +39,11 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
   const [isSyncingNotebook, setIsSyncingNotebook] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [sortKey, setSortKey] = useState<'dateAdded' | 'rating' | 'topic' | 'queue' | 'author' | 'pubDate'>('dateAdded');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
-  // Virtual shelf logic
+  // Virtual shelf logic (filter only; sort applied separately)
   const filteredItems = useMemo(() => {
     let paperItems: any[] = [];
     let bookItems: any[] = [];
@@ -60,13 +63,70 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
       bookItems = books.filter(b => b.shelfIds.includes(activeShelfId));
     }
 
-    return [...paperItems.map(p => ({...p, itemType: 'article'})), ...bookItems.map(b => ({...b, itemType: 'book'}))]
-      .sort((a: any, b: any) => {
-        const dateA = a.itemType === 'article' ? a.date : a.dateAdded;
-        const dateB = b.itemType === 'article' ? b.date : b.dateAdded;
-        return new Date(dateB).getTime() - new Date(dateA).getTime();
-      });
+    return [
+      ...paperItems.map(p => ({ ...p, itemType: 'article' })),
+      ...bookItems.map(b => ({ ...b, itemType: 'book' }))
+    ];
   }, [articles, books, activeShelfId]);
+
+  const sortedItems = useMemo(() => {
+    const items = [...filteredItems];
+    const dir = sortDir === 'asc' ? 1 : -1;
+
+    const getAddedIndex = (item: any) => {
+      if (item.itemType === 'article') {
+        const idx = articles.findIndex(a => a.id === item.id);
+        return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+      }
+      const idx = books.findIndex(b => b.id === item.id);
+      return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+    };
+
+    const getPubDate = (item: any) => {
+      const raw = item.itemType === 'article' ? item.date : item.dateAdded;
+      return raw ? new Date(raw).getTime() : 0;
+    };
+
+    return items.sort((a: any, b: any) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case 'rating':
+          cmp = (a.rating || 0) - (b.rating || 0);
+          break;
+        case 'topic': {
+          const topicA = (a.tags && a.tags[0]) || '';
+          const topicB = (b.tags && b.tags[0]) || '';
+          cmp = topicA.localeCompare(topicB);
+          break;
+        }
+        case 'queue': {
+          const qa = a.shelfIds?.includes('default-queue') ? 1 : 0;
+          const qb = b.shelfIds?.includes('default-queue') ? 1 : 0;
+          cmp = qa - qb;
+          break;
+        }
+        case 'author': {
+          const authorA = a.itemType === 'article'
+            ? (a.authors && a.authors[0]) || ''
+            : a.author || '';
+          const authorB = b.itemType === 'article'
+            ? (b.authors && b.authors[0]) || ''
+            : b.author || '';
+          cmp = authorA.localeCompare(authorB);
+          break;
+        }
+        case 'pubDate':
+          cmp = getPubDate(a) - getPubDate(b);
+          break;
+        case 'dateAdded':
+        default:
+          // Use original array order as a proxy for "Date Added"
+          cmp = getAddedIndex(a) - getAddedIndex(b);
+          break;
+      }
+      return cmp * dir;
+    });
+  }, [filteredItems, sortKey, sortDir, articles, books]);
 
   const handleCreateShelf = () => {
     if (!newShelfName.trim()) return;
@@ -138,7 +198,7 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
 
   return (
     <div className="relative min-h-[calc(100vh-8rem)] flex flex-col">
-      <header className="flex justify-between items-center mb-8">
+      <header className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-100">Scientific Library</h2>
           <p className="text-slate-400 mt-1">
@@ -158,29 +218,125 @@ const LibrarySection: React.FC<LibrarySectionProps> = ({
         </div>
       </header>
 
-      {/* Main Grid Content */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 pb-32">
-        {filteredItems.map((item: any) => (
-          item.itemType === 'article' ? (
-            <ArticleCard 
-              key={item.id} 
-              article={item} 
-              allNotes={notes} 
-              onUpdate={onUpdateArticle} 
-              onNavigateToNote={onNavigateToNote} 
-              onRead={() => onRead(item)} 
-            />
-          ) : (
-            <BookCard key={item.id} book={item} />
-          )
-        ))}
-        {filteredItems.length === 0 && (
-          <div className="col-span-full flex flex-col items-center justify-center py-24 text-slate-600">
-             <span className="text-5xl mb-4">📚</span>
-             <p className="text-lg font-medium">This shelf is currently empty.</p>
+      <div className="flex justify-between items-center mb-6 gap-4">
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-slate-500 font-black">
+          <span>View</span>
+          <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-full p-1">
+            <button
+              onClick={() => setViewMode('cards')}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                viewMode === 'cards' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+              }`}
+            >
+              Cards
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+              }`}
+            >
+              List
+            </button>
           </div>
-        )}
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-slate-500">
+          <span className="uppercase tracking-[0.2em] font-black">Sort by</span>
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as any)}
+            className="bg-slate-950 border border-slate-800 rounded-full px-3 py-1 text-[10px] text-slate-200 outline-none"
+          >
+            <option value="dateAdded">Date Added</option>
+            <option value="rating">Rating</option>
+            <option value="topic">Topic</option>
+            <option value="queue">Queue</option>
+            <option value="author">Author</option>
+            <option value="pubDate">Publication Date</option>
+          </select>
+          <button
+            onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
+            className="w-7 h-7 flex items-center justify-center rounded-full bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortDir === 'asc' ? '↑' : '↓'}
+          </button>
+        </div>
       </div>
+
+      {/* Main Content: Cards or List */}
+      {viewMode === 'cards' ? (
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 pb-32">
+          {sortedItems.map((item: any) => (
+            item.itemType === 'article' ? (
+              <ArticleCard 
+                key={item.id} 
+                article={item} 
+                allNotes={notes} 
+                onUpdate={onUpdateArticle} 
+                onNavigateToNote={onNavigateToNote} 
+                onRead={() => onRead(item)} 
+              />
+            ) : (
+              <BookCard key={item.id} book={item} />
+            )
+          ))}
+          {sortedItems.length === 0 && (
+            <div className="col-span-full flex flex-col items-center justify-center py-24 text-slate-600">
+               <span className="text-5xl mb-4">📚</span>
+               <p className="text-lg font-medium">This shelf is currently empty.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto pb-32">
+          {sortedItems.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-24 text-slate-600">
+               <span className="text-5xl mb-4">📚</span>
+               <p className="text-lg font-medium">This shelf is currently empty.</p>
+            </div>
+          ) : (
+            <div className="min-w-full bg-slate-950/60 border border-slate-800 rounded-2xl overflow-hidden">
+              <div className="grid grid-cols-7 gap-0 border-b border-slate-800 bg-slate-900/70 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                <div className="px-3 py-2 col-span-2">Title</div>
+                <div className="px-3 py-2">Author</div>
+                <div className="px-3 py-2">Topic</div>
+                <div className="px-3 py-2">Shelves</div>
+                <div className="px-3 py-2">Rating</div>
+                <div className="px-3 py-2">Pub Date</div>
+              </div>
+              <div className="divide-y divide-slate-800">
+                {sortedItems.map((item: any) => {
+                  const isArticle = item.itemType === 'article';
+                  const firstTopic = (item.tags && item.tags[0]) || '-';
+                  const firstAuthor = isArticle
+                    ? ((item.authors && item.authors[0]) || '-')
+                    : (item.author || '-');
+                  const rating = item.rating && item.rating > 0 ? item.rating : '?';
+                  const pubDate = isArticle ? (item.year || '-') : (item.dateAdded ? item.dateAdded.substring(0, 10) : '-');
+                  const shelvesLabel = (item.shelfIds && item.shelfIds.length > 0)
+                    ? item.shelfIds.map((sid: string) => shelves.find(s => s.id === sid)?.name || (sid === 'default-queue' ? 'Queue' : sid)).join(', ')
+                    : '—';
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => isArticle && onRead(item)}
+                      className="w-full grid grid-cols-7 gap-0 text-left text-[11px] hover:bg-slate-900/60 transition-colors"
+                    >
+                      <div className="px-3 py-2 col-span-2 text-slate-100 truncate">{item.title}</div>
+                      <div className="px-3 py-2 text-slate-300 truncate">{firstAuthor}</div>
+                      <div className="px-3 py-2 text-slate-300 truncate">{firstTopic}</div>
+                      <div className="px-3 py-2 text-slate-300 truncate">{shelvesLabel}</div>
+                      <div className="px-3 py-2 text-slate-300">{rating}</div>
+                      <div className="px-3 py-2 text-slate-300">{pubDate}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bottom Floating Shelf Dock */}
       <div className="fixed bottom-8 left-72 right-8 z-[40]">

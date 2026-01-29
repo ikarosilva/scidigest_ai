@@ -69,8 +69,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, allNotes, onUpdate, 
               type="number"
               min="1"
               max="10"
-              value={article.rating}
-              onChange={(e) => onUpdate(article.id, { rating: parseInt(e.target.value) })}
+              value={article.rating === 0 ? '' : article.rating}
+              onChange={(e) => {
+                const val = e.target.value;
+                const num = val === '' ? 0 : parseInt(val);
+                onUpdate(article.id, { rating: isNaN(num) ? 0 : num });
+              }}
               className="w-12 text-center bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 rounded text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none transition-all py-1"
             />
             <span className="text-xs text-slate-500">/10</span>
